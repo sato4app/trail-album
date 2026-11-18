@@ -61,6 +61,8 @@ trail-album/
 │     ├─ thumbnail.js      … サムネイルの作成
 │     ├─ saver.js          … フォルダへの保存・ZIP の作成
 │     └─ naming.js         … フォルダ名・ファイル名の作成と使えない文字の除去
+├─ .github/workflows/
+│  └─ pages.yml            … public を GitHub Pages に公開する
 ├─ vercel.json             … outputDirectory を public にする
 └─ README.md
 ```
@@ -83,3 +85,8 @@ python -m http.server 8000
 ```
 
 Vercel には、`public` を出力先とする静的サイトとしてデプロイします（ビルドコマンドなし）。
+
+GitHub Pages（https://sato4app.github.io/trail-album/）には、`main` に push するたびに
+GitHub Actions（`.github/workflows/pages.yml`）が `public` フォルダを公開します。
+リポジトリの Settings → Pages → Source は「GitHub Actions」にしておきます
+（「Deploy from a branch」のままだと、ルートに index.html が無いため README.md が表示されます）。
