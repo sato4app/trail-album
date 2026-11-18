@@ -137,5 +137,23 @@
       <p class="dialog-caption" id="dialogCaption"></p>
     </div>
   </dialog>
+
+  <!-- 保存の確認(どこに何を保存するかを見せてから保存する: app.js の confirmSave) -->
+  <dialog class="confirm-dialog" id="confirmDialog" aria-labelledby="confirmTitle" aria-describedby="confirmLead">
+    <form method="dialog" class="confirm-body">
+      <h2 class="confirm-title" id="confirmTitle"></h2>
+      <p class="confirm-lead" id="confirmLead"></p>
+      <ul class="confirm-tree" id="confirmTree"></ul>
+      <details class="confirm-photos" id="confirmPhotos">
+        <summary id="confirmPhotosSummary"></summary>
+        <ul id="confirmPhotoList"></ul>
+      </details>
+      <p class="hint confirm-note" id="confirmNote"></p>
+      <div class="confirm-actions">
+        <button type="submit" class="btn" value="cancel">キャンセル</button>
+        <button type="submit" class="btn btn-primary" value="ok" id="confirmOk" autofocus></button>
+      </div>
+    </form>
+  </dialog>
 </body>
 </html>

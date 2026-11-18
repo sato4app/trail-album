@@ -66,6 +66,12 @@ function init() {
     $('dialogImage').removeAttribute('src');
   });
 
+  // 保存の確認: 背景を押したらキャンセルとして閉じる
+  const confirmDialog = $('confirmDialog');
+  confirmDialog.addEventListener('click', (e) => {
+    if (e.target === confirmDialog) confirmDialog.close('cancel');
+  });
+
   // 保存の途中でページを閉じようとしたら確認する
   window.addEventListener('beforeunload', (e) => {
     if (state.busy) e.preventDefault();
@@ -109,7 +115,8 @@ function setupDragAndDrop() {
 
 // ===== KMZ の読み込み =====
 async function loadFile(file, hadMultiple = false) {
-  if (state.busy) return;
+  // 保存の確認を出している間は読み込まない(確認した内容と違うものを保存しないように)
+  if (state.busy || $('confirmDialog').open) return;
   setBusy(true);
   showStatus(`「${file.name}」を読み込み中…`);
   try {
@@ -254,11 +261,25 @@ async function onSaveFolder() {
   if (!state.album || state.busy) return;
   showResult('');
   // 保存先が未指定なら、失敗ではなく次の操作の案内として伝える
-  if (!currentSaveDir()) {
+  const dir = currentSaveDir();
+  if (!dir) {
     showResult('保存先が指定されていません。「保存先を指定」で、保存先のフォルダを指定してください。', 'guide');
     return;
   }
-  // 権限の確認は、ボタンを押した直後に出す(Excel の作成より先に)
+
+  const output = prepareOutput();
+  const confirmed = await confirmSave({
+    title: 'フォルダに保存します',
+    lead: `保存先「${dir.name}」の中に、次のフォルダを作って保存します。`,
+    parent: { name: dir.name, note: '保存先' },
+    container: { name: output.plan.folderName, note: '新しく作るフォルダ', kind: 'folder' },
+    output,
+    note: '同じ名前のフォルダが既にあるときは、上書きせず「名前 (2)」のように番号を付けて作ります。',
+    okLabel: '保存する'
+  });
+  if (!confirmed) return;
+
+  // 書き込みの権限の確認は、「保存する」を押した直後に出す(Excel の作成より先に)
   let parent;
   try {
     parent = await prepareSaveDir();
@@ -270,7 +291,7 @@ async function onSaveFolder() {
     updateSaveDirLabel();
   }
 
-  await runOutput(async (plan, entries, onPhotoDone) => {
+  await runOutput(output, async (plan, entries, onPhotoDone) => {
     const name = await saveToFolder(parent, plan.folderName, entries, (path) => {
       if (path.startsWith(`${PHOTOS_DIR}/`)) onPhotoDone();
     });
@@ -282,34 +303,118 @@ async function onSaveFolder() {
 async function onSaveZip() {
   if (!state.album || state.busy) return;
   showResult('');
-  await runOutput(async (plan, entries, onPhotoDone) => {
+  const output = prepareOutput();
+  const zipName = `${output.plan.folderName}.zip`;
+  const confirmed = await confirmSave({
+    title: 'ZIP でダウンロードします',
+    lead: '次の ZIP ファイルを「ダウンロード」フォルダにダウンロードします' +
+      '(ブラウザの設定でダウンロード先を変えている場合は、その場所になります)。',
+    parent: { name: 'ダウンロード', note: 'ダウンロード先' },
+    container: { name: zipName, note: 'ZIP ファイル', kind: 'zip' },
+    output,
+    note: '同じ名前のファイルが既にあるときは、ブラウザが番号を付けた名前にします。' +
+      'ZIP は展開してから Excel ファイルを開いてください。',
+    okLabel: 'ダウンロードする'
+  });
+  if (!confirmed) return;
+
+  await runOutput(output, async (plan, entries, onPhotoDone) => {
     const blob = await buildZipBlob(entries, (path) => {
       if (path.startsWith(`${PHOTOS_DIR}/`)) onPhotoDone();
     });
-    const zipName = `${plan.folderName}.zip`;
     downloadBlob(blob, zipName);
     return `「${zipName}」をダウンロードしました。ZIP を展開してから「${plan.xlsxFileName}」を開いてください` +
       '(展開せずに開くと、Excel のリンクから写真を開けません)。';
   }, 'ZIP を作成中…');
 }
 
-// 保存の共通処理: Excel を作り、保存する内容(entries)をそろえて save に渡す。
-// save(plan, entries, onPhotoDone) は完了メッセージを返す。
-async function runOutput(save, photoLabel) {
-  setBusy(true);
+// 保存する内容を決める。確認の画面に出した名前のとおりに保存するよう、ここで決めたものを最後まで使う
+function prepareOutput() {
   const nowMs = Date.now();
-  const plan = buildOutputPlan(state.album, nowMs);
+  return {
+    album: state.album,
+    nowMs,
+    plan: buildOutputPlan(state.album, nowMs),
+    includeKmz: $('includeKmz').checked
+  };
+}
+
+// ===== 保存の確認 =====
+// どこに何が保存されるかを、フォルダ・ファイルの木で見せて確かめる。
+// 「保存する」(okLabel)なら true、キャンセル・Esc・背景を押したときは false を返す。
+//   parent:    保存先 { name, note }
+//   container: 保存先の中に作るもの { name, note, kind: 'folder' | 'zip' }
+//   output:    prepareOutput の結果(中身のファイル名に使う)
+function confirmSave({ title, lead, parent, container, output, note, okLabel }) {
+  const { plan, includeKmz } = output;
+  const contents = [
+    treeItem(plan.xlsxFileName, '写真の一覧(Excel)', 'file'),
+    treeItem(PHOTOS_DIR, `写真 ${plan.photos.length} 枚(元の画質のまま)`, 'folder')
+  ];
+  if (includeKmz) contents.push(treeItem(plan.kmzFileName, '読み込んだ KMZ', 'file'));
+  const tree = treeItem(parent.name, parent.note, 'folder', [
+    treeItem(container.name, container.note, container.kind, contents)
+  ]);
+
+  $('confirmTitle').textContent = title;
+  $('confirmLead').textContent = lead;
+  $('confirmTree').replaceChildren(tree);
+  $('confirmPhotosSummary').textContent = `写真のファイル名を見る(${plan.photos.length} 枚)`;
+  $('confirmPhotoList').replaceChildren(...plan.photos.map((p) => {
+    const li = document.createElement('li');
+    li.textContent = p.fileName;
+    return li;
+  }));
+  $('confirmPhotos').open = false;
+  $('confirmNote').textContent = note;
+  $('confirmOk').textContent = okLabel;
+
+  const dialog = $('confirmDialog');
+  dialog.returnValue = '';
+  dialog.showModal();
+  return new Promise((resolve) => {
+    dialog.addEventListener('close', () => resolve(dialog.returnValue === 'ok'), { once: true });
+  });
+}
+
+// 木の1項目(名前・説明・中身)。kind は 'folder' | 'zip' | 'file'(アイコンの違い: style.css)
+function treeItem(name, note, kind, children = []) {
+  const li = document.createElement('li');
+  li.className = `is-${kind}`;
+  const nameEl = document.createElement('span');
+  nameEl.className = 'tree-name';
+  nameEl.textContent = name;
+  li.append(nameEl);
+  if (note) {
+    const noteEl = document.createElement('span');
+    noteEl.className = 'tree-note';
+    noteEl.textContent = note;
+    li.append(noteEl);
+  }
+  if (children.length > 0) {
+    const ul = document.createElement('ul');
+    ul.append(...children);
+    li.append(ul);
+  }
+  return li;
+}
+
+// 保存の共通処理: Excel を作り、保存する内容(entries)をそろえて save に渡す。
+// output は prepareOutput の結果。save(plan, entries, onPhotoDone) は完了メッセージを返す。
+async function runOutput(output, save, photoLabel) {
+  setBusy(true);
+  const { album, nowMs, plan, includeKmz } = output;
   const total = plan.photos.length;
   let done = 0;
   try {
     showProgress('Excel を作成中…');
-    const xlsx = await buildWorkbookBlob(state.album, plan, nowMs);
+    const xlsx = await buildWorkbookBlob(album, plan, nowMs);
 
     const entries = [
       { path: plan.xlsxFileName, data: xlsx },
       ...plan.photos.map((p) => ({ path: `${PHOTOS_DIR}/${p.fileName}`, data: p.bytes }))
     ];
-    if ($('includeKmz').checked) entries.push({ path: plan.kmzFileName, data: state.album.kmzBytes });
+    if (includeKmz) entries.push({ path: plan.kmzFileName, data: album.kmzBytes });
 
     showProgress(photoLabel, 0, total);
     const message = await save(plan, entries, () => {
