@@ -75,11 +75,17 @@ export function displayNameOf(photo, no) {
 }
 
 // 写真のファイル名: 番号3桁_YYYYMMDD-HHmm_名称.拡張子
-// 撮影日時が無ければ日時部分を、名称が空なら名称部分を省く
+// 撮影日時が無ければ日時部分を、名称が空なら名称部分を省く。
+// 名称部分の空白(全角の空白・改行・タブを含む)は _ に置き換える(箕面 大滝 → 箕面_大滝)。
+// 名称に元からある - は、利用者が意図して付けたものとして残す(Minoh - Falls → Minoh_-_Falls)。
+// 続く空白や、空白の前後にある _ は1つの _ にまとめる(見分けが付かないため)。
+// 写真はもともと名前を付け直して保存するので、空白を含めなければ Excel の「写真ファイル」の
+// ハイパーリンクで空白の扱い(%20 への置き換え)を気にしなくてよい。
 export function buildPhotoFileName(no, photo) {
   const parts = [pad3(no)];
   if (Number.isFinite(photo.timeMs)) parts.push(formatJstCompact(photo.timeMs));
-  const name = sanitizeName(photo.name);
+  // 先に sanitizeName で前後の空白を除いてから置き換える(名称の先頭・末尾が _ にならないように)
+  const name = sanitizeName(photo.name).replace(/[\s_]*\s[\s_]*/gu, '_');
   if (name) parts.push(name);
   return `${parts.join('_')}.${photo.ext}`;
 }

@@ -77,9 +77,9 @@ function excelJstDate(ms) {
 const coord = (v) => Number(v.toFixed(6));
 
 // Excel の「写真ファイル」のリンク先(Excel ファイルからの相対パス)。
-// 空白は %20 にする(Excel 自身もリンクの空白をこの形で保存する)
+// 写真のファイル名には空白を含めない(naming.js の buildPhotoFileName)ので、そのまま使える
 export function photoLinkTarget(fileName) {
-  return `${PHOTOS_DIR}/${fileName.replaceAll(' ', '%20')}`;
+  return `${PHOTOS_DIR}/${fileName}`;
 }
 
 // Excel ファイルを作り、Blob で返す。
