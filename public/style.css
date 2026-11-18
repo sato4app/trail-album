@@ -250,9 +250,17 @@ main {
 }
 
 .message[data-kind="ok"],
-.message[data-kind="error"] {
+.message[data-kind="error"],
+.message[data-kind="guide"] {
   padding: 10px 14px;
   border-radius: 8px;
+}
+
+/* 案内(失敗ではなく、次に何をすればよいかを伝える) */
+.message[data-kind="guide"] {
+  border: 1px solid var(--accent);
+  background: var(--accent-soft);
+  color: var(--text);
 }
 
 .message[data-kind="ok"] {

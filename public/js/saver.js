@@ -6,7 +6,7 @@
 export const canSaveToFolder = typeof globalThis.showDirectoryPicker === 'function';
 
 // ===== 保存先(IndexedDB) =====
-// 保存先(出力フォルダを作る親フォルダ)は、最初に1回選べば覚えておき、次からは選ぶ画面を出さずに使う。
+// 保存先(出力フォルダを作る親フォルダ)は「保存先を指定」で1回選べば覚えておき、次からは選ぶ画面を出さずに使う。
 // フォルダのハンドルは IndexedDB にそのまま保存できる。
 // 書き込みの権限はブラウザが管理する。同じ訪問のうち(このサイトのタブを全部閉じるまで)は、
 // 一度許可されれば確認なしで書き込める。次の訪問では requestPermission で改めて確認が出るが、
@@ -38,7 +38,7 @@ async function dbRequest(mode, fn) {
   }
 }
 
-// 保存先(起動時に loadSaveDir で読み込んでおく)。未設定なら null
+// 保存先(起動時に loadSaveDir で読み込んでおく)。未指定なら null
 let saveDir = null;
 
 // 起動時に呼ぶ。権限の確認や保存先を選ぶ画面はボタンを押した直後に出す必要があるため、
@@ -53,7 +53,7 @@ export async function loadSaveDir() {
   return saveDir;
 }
 
-// 今の保存先(未設定なら null)
+// 今の保存先(未指定なら null)
 export function currentSaveDir() {
   return saveDir;
 }
@@ -69,7 +69,7 @@ async function storeSaveDir(handle) {
 }
 
 // ===== フォルダへ直接保存 =====
-// 保存先を選ぶ画面を出し、選ばれたフォルダを保存先として覚える。キャンセルされたら null。
+// 「保存先を指定」ボタン: 保存先を選ぶ画面を出し、選ばれたフォルダを保存先として覚える。キャンセルされたら null。
 // ボタンを押した直後に呼ぶこと(間に時間のかかる処理を挟むと、利用者の操作によるものと見なされず止められる)。
 export async function pickSaveDir() {
   const options = { ...RW };
@@ -91,25 +91,29 @@ export async function pickSaveDir() {
   }
 }
 
-// 「フォルダに保存」を押した直後に呼び、書き込める保存先を返す。
-// - 保存先が未設定なら、保存先を選ぶ画面を出す(キャンセルされたら null)
-// - 保存先が決まっていれば、選ぶ画面は出さない。書き込みの権限がまだ無いとき(次の訪問など)だけ、
-//   ブラウザの確認を出す。許可されなければエラーを投げる
-// - 保存先のフォルダが移動・削除されていたら、覚えた保存先を忘れてエラーを投げる
+// 「クリア」ボタン: 覚えている保存先を忘れる
+export async function clearSaveDir() {
+  await storeSaveDir(null);
+}
+
+// 「フォルダに保存」を押した直後に呼び、書き込める保存先を返す。使えないときはエラーを投げる。
+// - 保存先が未指定のときは呼ばないこと(未指定の案内は app.js で出す)。ここでは選ぶ画面を出さない
+// - 書き込みの権限がまだ無いとき(次の訪問など)だけ、ブラウザの確認を出す
+// - 保存先のフォルダが移動・削除されていたら、覚えた保存先を忘れる
 export async function prepareSaveDir() {
-  if (!saveDir) return pickSaveDir();
   const dir = saveDir;
+  if (!dir) throw new Error('保存先が指定されていません。');
   if ((await dir.queryPermission(RW)) !== 'granted' && (await dir.requestPermission(RW)) !== 'granted') {
     throw new Error(
       `保存先「${dir.name}」への書き込みが許可されませんでした。` +
-      'もう一度「フォルダに保存」を押して許可するか、「保存先を変更」で別のフォルダを選んでください。'
+      'もう一度「フォルダに保存」を押して許可するか、「保存先を指定」で別のフォルダを指定してください。'
     );
   }
   if (!(await dirExists(dir))) {
     await storeSaveDir(null);
     throw new Error(
       `保存先のフォルダ「${dir.name}」が見つかりません(移動・削除された可能性があります)。` +
-      'もう一度「フォルダに保存」を押して、保存先を選び直してください。'
+      '「保存先を指定」で、保存先のフォルダを指定し直してください。'
     );
   }
   return dir;

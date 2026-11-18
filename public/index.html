@@ -83,12 +83,13 @@
         <li id="guideFolder">
           <strong>フォルダに保存</strong>(Chrome・Edge): 保存先のフォルダの中に、そのまま使える形で保存します。
           パソコンにバックアップを残すときに向いています。
-          保存先は最初に1回選べば覚えておき、次からはそのまま保存します。
+          保存先は「保存先を指定」で1回選べば覚えておき、次からはそのまま保存します。
           ブラウザを開き直した後の最初の保存では、書き込みを許可するか確かめられます。
           そこで毎回許可するほうを選ぶと、次からは確かめられずに保存できます。
         </li>
         <li>
           <strong>ZIP でダウンロード</strong>(すべてのブラウザ): 1つの ZIP ファイルにまとめてダウンロードします。
+          ダウンロード先は「ダウンロード」フォルダです(ブラウザの設定でダウンロード先を変えている場合は、その場所になります)。
           人に送る・持ち運ぶときに向いています。展開してから Excel ファイルを開いてください(展開せずに開くと、写真へのリンクが働きません)。
         </li>
       </ul>
@@ -99,8 +100,10 @@
       <!-- 「フォルダに保存」の保存先(フォルダに保存できないブラウザでは隠す: app.js) -->
       <div class="save-dir" id="saveDirRow" hidden>
         <span>保存先:</span>
-        <strong id="saveDirName" class="is-unset">未設定(初めて保存するときに選びます)</strong>
-        <button type="button" class="btn btn-small" id="btnChangeSaveDir">保存先を変更</button>
+        <strong id="saveDirName" class="is-unset">（フォルダ未指定）</strong>
+        <button type="button" class="btn btn-small" id="btnPickSaveDir">保存先を指定</button>
+        <button type="button" class="btn btn-small" id="btnClearSaveDir" disabled
+          title="保存先の指定を解除します（フォルダや写真は消えません）">クリア</button>
       </div>
       <div class="actions">
         <button type="button" class="btn btn-primary" id="btnSaveFolder" hidden>フォルダに保存</button>

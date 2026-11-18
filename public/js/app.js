@@ -10,6 +10,7 @@ import {
   loadSaveDir,
   currentSaveDir,
   pickSaveDir,
+  clearSaveDir,
   prepareSaveDir,
   saveToFolder,
   buildZipBlob,
@@ -52,7 +53,8 @@ function init() {
   setupDragAndDrop();
 
   $('btnSaveFolder').addEventListener('click', onSaveFolder);
-  $('btnChangeSaveDir').addEventListener('click', onChangeSaveDir);
+  $('btnPickSaveDir').addEventListener('click', onPickSaveDir);
+  $('btnClearSaveDir').addEventListener('click', onClearSaveDir);
   $('btnSaveZip').addEventListener('click', onSaveZip);
 
   const dialog = $('photoDialog');
@@ -218,40 +220,55 @@ function openPhoto(photo) {
 }
 
 // ===== 保存 =====
-// 保存先の表示(ブラウザからはフォルダの名前だけが分かり、場所(パス)は分からない)
+// 保存先の表示(ブラウザからはフォルダの名前だけが分かり、場所(パス)は分からない)。
+// 未指定なら「（フォルダ未指定）」を薄く表示し、「クリア」を押せないようにする
 function updateSaveDirLabel() {
   const dir = currentSaveDir();
-  $('saveDirName').textContent = dir ? dir.name : '未設定(初めて保存するときに選びます)';
+  $('saveDirName').textContent = dir ? dir.name : '（フォルダ未指定）';
   $('saveDirName').classList.toggle('is-unset', !dir);
+  $('btnClearSaveDir').disabled = state.busy || !dir;
 }
 
-async function onChangeSaveDir() {
+async function onPickSaveDir() {
   if (state.busy) return;
   showResult('');
   try {
     const dir = await pickSaveDir();
     if (dir) showResult(`保存先を「${dir.name}」にしました。`, 'ok');
   } catch (err) {
-    showResult(err.message || '保存先を選べませんでした。', 'error');
+    // まだ何も書き込んでいないので、失敗ではなく次の操作の案内として伝える
+    showResult(err.message || '保存先を選べませんでした。もう一度「保存先を指定」を押してください。', 'guide');
   } finally {
     updateSaveDirLabel();
   }
 }
 
+async function onClearSaveDir() {
+  if (state.busy || !currentSaveDir()) return;
+  await clearSaveDir();
+  updateSaveDirLabel();
+  showResult('保存先をクリアしました。', 'ok');
+}
+
 async function onSaveFolder() {
   if (!state.album || state.busy) return;
   showResult('');
-  // 権限の確認や保存先を選ぶ画面は、ボタンを押した直後に出す(Excel の作成より先に)
+  // 保存先が未指定なら、失敗ではなく次の操作の案内として伝える
+  if (!currentSaveDir()) {
+    showResult('保存先が指定されていません。「保存先を指定」で、保存先のフォルダを指定してください。', 'guide');
+    return;
+  }
+  // 権限の確認は、ボタンを押した直後に出す(Excel の作成より先に)
   let parent;
   try {
     parent = await prepareSaveDir();
   } catch (err) {
-    showResult(err.message || '保存先を使えませんでした。', 'error');
+    // 許可されなかった・保存先が見つからないなど。まだ何も書き込んでいないので案内として伝える
+    showResult(err.message || '保存先を使えませんでした。「保存先を指定」で指定し直してください。', 'guide');
     return;
   } finally {
     updateSaveDirLabel();
   }
-  if (!parent) return; // 保存先を選ぶ画面でキャンセルされた
 
   await runOutput(async (plan, entries, onPhotoDone) => {
     const name = await saveToFolder(parent, plan.folderName, entries, (path) => {
@@ -315,9 +332,10 @@ async function runOutput(save, photoLabel) {
 // ===== 表示の切り替え =====
 function setBusy(busy) {
   state.busy = busy;
-  for (const id of ['btnPickFile', 'btnSaveFolder', 'btnChangeSaveDir', 'btnSaveZip', 'includeKmz']) {
+  for (const id of ['btnPickFile', 'btnSaveFolder', 'btnPickSaveDir', 'btnSaveZip', 'includeKmz']) {
     $(id).disabled = busy;
   }
+  updateSaveDirLabel(); // 「クリア」は保存先が未指定のときも押せないので別に扱う
   $('dropZone').classList.toggle('is-disabled', busy);
   document.body.classList.toggle('is-busy', busy);
 }
