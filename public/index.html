@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!-- 写真を外部へ送らないことをブラウザにも守らせる: 通信(fetch・XHR など)はこのサイトの中だけに限る -->
+  <meta http-equiv="Content-Security-Policy" content="connect-src 'self' blob: data:">
+  <title>Trail Album</title>
+  <meta name="description" content="ハイキングで撮った写真の KMZ ファイルから、写真一覧の Excel と元の画質の写真をまとめて保存します。">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%232f6b4f'/%3E%3Cpath d='M4 25 12 11l5 8 4-5 7 11z' fill='%23fff'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="style.css">
+  <!-- 外部ライブラリ(バージョン固定・改ざん検知付き)
+       JSZip: KMZ の展開・ZIP の作成 / ExcelJS: 写真一覧.xlsx の作成 -->
+  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"
+    integrity="sha384-+mbV2IY1Zk/X1p/nWllGySJSUN8uMs+gUAN10Or95UBH0fpj6GfKgPmgC5EXieXG"
+    crossorigin="anonymous" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"
+    integrity="sha384-Pqp51FUN2/qzfxZxBCtF0stpc9ONI6MYZpVqmo8m20SoaQCzf+arZvACkLkirlPz"
+    crossorigin="anonymous" defer></script>
+  <script type="module" src="js/app.js"></script>
+</head>
+<body>
+  <header class="app-header">
+    <div class="inner">
+      <h1>
+        <svg class="logo" viewBox="0 0 32 32" aria-hidden="true">
+          <rect width="32" height="32" rx="7" />
+          <path d="M4 25 12 11l5 8 4-5 7 11z" />
+        </svg>
+        Trail Album
+      </h1>
+      <p>ハイキングで撮った写真の KMZ ファイルから、写真一覧の Excel と元の画質の写真をまとめて保存します。</p>
+    </div>
+  </header>
+
+  <main class="inner">
+    <!-- 1. KMZ の選択 -->
+    <section class="card" aria-labelledby="selectTitle">
+      <h2 id="selectTitle"><span class="step">1</span>KMZ ファイルを選ぶ</h2>
+      <div class="drop-zone" id="dropZone">
+        <p class="drop-lead">ここに KMZ ファイルをドラッグ＆ドロップ</p>
+        <p class="drop-or">または</p>
+        <button type="button" class="btn btn-primary" id="btnPickFile">KMZ ファイルを選ぶ</button>
+        <input type="file" id="fileInput" accept=".kmz" hidden>
+      </div>
+      <p class="message" id="loadStatus" role="status" aria-live="polite"></p>
+    </section>
+
+    <!-- 2. プレビュー(読み込み後に表示) -->
+    <section class="card" id="previewSection" aria-labelledby="previewTitle" hidden>
+      <h2 id="previewTitle"><span class="step">2</span>内容を確かめる</h2>
+      <dl class="summary">
+        <div><dt>KMZ ファイル</dt><dd id="sumFile"></dd></div>
+        <div><dt>Document 名</dt><dd id="sumTitle"></dd></div>
+        <div><dt>写真の枚数</dt><dd id="sumCount"></dd></div>
+        <div><dt>出力フォルダ名(予定)</dt><dd id="sumFolder"></dd></div>
+      </dl>
+      <p class="hint">並び順は出力と同じ(撮影日時の順)です。写真を押すと元の写真を大きく表示します。</p>
+      <div class="table-wrap">
+        <table class="photo-table">
+          <thead>
+            <tr>
+              <th class="col-no" scope="col">No.</th>
+              <th class="col-thumb" scope="col">写真</th>
+              <th class="col-name" scope="col">名称</th>
+              <th class="col-time" scope="col">撮影日時</th>
+              <th class="col-pos" scope="col">緯度, 経度</th>
+            </tr>
+          </thead>
+          <tbody id="photoRows"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- 3. 出力 -->
+    <section class="card" id="outputSection" aria-labelledby="outputTitle" hidden>
+      <h2 id="outputTitle"><span class="step">3</span>保存する</h2>
+      <p class="hint">
+        「写真一覧.xlsx」と、元の画質の写真を入れた「photos」フォルダを、上の出力フォルダ名でまとめて保存します。
+      </p>
+      <label class="check">
+        <input type="checkbox" id="includeKmz" checked>
+        元の KMZ も一緒に保存する
+      </label>
+      <div class="actions">
+        <button type="button" class="btn btn-primary" id="btnSaveFolder" hidden>フォルダに保存</button>
+        <button type="button" class="btn" id="btnSaveZip">ZIP でダウンロード</button>
+      </div>
+      <p class="hint" id="saveHint" hidden>
+        このブラウザはフォルダへの直接保存に対応していないため、ZIP でダウンロードします(Chrome・Edge ではフォルダに直接保存できます)。
+      </p>
+      <div class="progress" id="progress" hidden>
+        <progress id="progressBar"></progress>
+        <span id="progressText"></span>
+      </div>
+      <p class="message" id="resultMessage" role="status" aria-live="polite" hidden></p>
+    </section>
+  </main>
+
+  <footer class="notes">
+    <div class="inner">
+      <p>写真はこのパソコンの中だけで処理し、外部には送信しません。</p>
+      <p>Excel は保存時に画像を圧縮することがあります。元の画質の写真は photos フォルダに保存されています。</p>
+    </div>
+  </footer>
+
+  <!-- 元の写真の拡大表示 -->
+  <dialog class="photo-dialog" id="photoDialog" aria-labelledby="dialogCaption">
+    <div class="dialog-body">
+      <form method="dialog">
+        <button type="submit" class="dialog-close" aria-label="閉じる">×</button>
+      </form>
+      <img id="dialogImage" alt="">
+      <p class="dialog-caption" id="dialogCaption"></p>
+    </div>
+  </dialog>
+</body>
+</html>
