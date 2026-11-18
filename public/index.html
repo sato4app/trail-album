@@ -10,7 +10,7 @@
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%232f6b4f'/%3E%3Cpath d='M4 25 12 11l5 8 4-5 7 11z' fill='%23fff'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="style.css">
   <!-- 外部ライブラリ(バージョン固定・改ざん検知付き)
-       JSZip: KMZ の展開・ZIP の作成 / ExcelJS: 写真一覧.xlsx の作成 -->
+       JSZip: KMZ の展開・ZIP の作成 / ExcelJS: 写真の一覧の Excel(.xlsx)の作成 -->
   <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"
     integrity="sha384-+mbV2IY1Zk/X1p/nWllGySJSUN8uMs+gUAN10Or95UBH0fpj6GfKgPmgC5EXieXG"
     crossorigin="anonymous" defer></script>
@@ -76,8 +76,19 @@
     <section class="card" id="outputSection" aria-labelledby="outputTitle" hidden>
       <h2 id="outputTitle"><span class="step">3</span>保存する</h2>
       <p class="hint">
-        「写真一覧.xlsx」と、元の画質の写真を入れた「photos」フォルダを、上の出力フォルダ名でまとめて保存します。
+        写真の一覧の Excel ファイル(KMZ と同じ名前の .xlsx)と、元の画質の写真を入れた「photos」フォルダを、上の出力フォルダ名でまとめて保存します。
       </p>
+      <!-- 保存方法の使い分け(フォルダに保存できないブラウザでは、その項目を隠す: app.js) -->
+      <ul class="save-guide">
+        <li id="guideFolder">
+          <strong>フォルダに保存</strong>(Chrome・Edge): 選んだフォルダの中に、そのまま使える形で保存します。
+          パソコンにバックアップを残すときに向いています。
+        </li>
+        <li>
+          <strong>ZIP でダウンロード</strong>(すべてのブラウザ): 1つの ZIP ファイルにまとめてダウンロードします。
+          人に送る・持ち運ぶときに向いています。展開してから Excel ファイルを開いてください(展開せずに開くと、写真へのリンクが働きません)。
+        </li>
+      </ul>
       <label class="check">
         <input type="checkbox" id="includeKmz" checked>
         元の KMZ も一緒に保存する

@@ -1,5 +1,5 @@
 // 出力の保存: フォルダへ直接保存(File System Access API)と ZIP のダウンロード
-// 保存する内容は entries([{ path: '写真一覧.xlsx' | 'photos/001_….jpg' | '….kmz', data: Blob | Uint8Array }])
+// 保存する内容は entries([{ path: '….xlsx' | 'photos/001_….jpg' | '….kmz', data: Blob | Uint8Array }])
 // で受け取り、どちらの方法でも同じ構成で書き出す。
 
 // フォルダへ直接保存できるブラウザか(Chrome / Edge。安全な接続 https / localhost のときだけ使える)
@@ -141,7 +141,7 @@ async function existsIn(parentHandle, name) {
 export async function buildZipBlob(entries, onProgress) {
   const zip = new globalThis.JSZip();
   for (const entry of entries) {
-    // Blob(写真一覧.xlsx)はバイト列にしてから入れる(どの環境の JSZip でも確実に読めるように)
+    // Blob(Excel ファイル)はバイト列にしてから入れる(どの環境の JSZip でも確実に読めるように)
     const data = entry.data instanceof Blob ? new Uint8Array(await entry.data.arrayBuffer()) : entry.data;
     zip.file(entry.path, data, { binary: true });
   }

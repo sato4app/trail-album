@@ -441,6 +441,24 @@ main {
 }
 
 /* ===== 出力 ===== */
+/* 保存方法の使い分け */
+.save-guide {
+  margin: 0 0 14px;
+  padding: 10px 14px 10px 32px;
+  border-radius: 8px;
+  background: var(--surface-sub);
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.save-guide li + li {
+  margin-top: 6px;
+}
+
+.save-guide strong {
+  color: var(--text);
+}
+
 .check {
   display: inline-flex;
   align-items: center;

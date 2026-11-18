@@ -1,8 +1,8 @@
-// 写真一覧.xlsx の作成(ExcelJS を CDN から読み込んで使う)
+// Excel ファイル(.xlsx)の作成(ExcelJS を CDN から読み込んで使う)
+// ファイル名は KMZ と同じ名前にする(naming.js の buildOutputPlan の xlsxFileName)。
 // シート「写真一覧」に写真1枚を1行で並べ、シート「情報」に元の KMZ の情報を書く。
 import { JST_OFFSET_MS } from './naming.js';
 
-export const XLSX_FILE_NAME = '写真一覧.xlsx';
 export const PHOTOS_DIR = 'photos';
 const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 const APP_NAME = 'Trail Album';
@@ -76,13 +76,13 @@ function excelJstDate(ms) {
 
 const coord = (v) => Number(v.toFixed(6));
 
-// Excel の「写真ファイル」のリンク先(写真一覧.xlsx からの相対パス)。
+// Excel の「写真ファイル」のリンク先(Excel ファイルからの相対パス)。
 // 空白は %20 にする(Excel 自身もリンクの空白をこの形で保存する)
 export function photoLinkTarget(fileName) {
   return `${PHOTOS_DIR}/${fileName.replaceAll(' ', '%20')}`;
 }
 
-// 写真一覧.xlsx を作り、Blob で返す。
+// Excel ファイルを作り、Blob で返す。
 // plan は naming.js の buildOutputPlan の結果(各写真に thumb: { bytes, width, height } | null を持つ)。
 export async function buildWorkbookBlob(album, plan, nowMs) {
   const ExcelJS = globalThis.ExcelJS;

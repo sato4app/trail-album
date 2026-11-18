@@ -1,10 +1,10 @@
 // Trail Album のエントリポイント(画面の制御)
-// KMZ を読み込んでプレビューを表示し、写真一覧.xlsx と元の画質の写真を
-// フォルダへ直接保存するか、ZIP でダウンロードする。処理はすべてブラウザの中で行う。
+// KMZ を読み込んでプレビューを表示し、写真の一覧の Excel(KMZ と同じ名前の .xlsx)と
+// 元の画質の写真を、フォルダへ直接保存するか、ZIP でダウンロードする。処理はすべてブラウザの中で行う。
 import { readKmz, KmzError } from './kmz-reader.js';
 import { createThumbnail } from './thumbnail.js';
 import { buildOutputPlan, formatJstDateTime } from './naming.js';
-import { buildWorkbookBlob, XLSX_FILE_NAME, PHOTOS_DIR } from './excel-writer.js';
+import { buildWorkbookBlob, PHOTOS_DIR } from './excel-writer.js';
 import {
   canSaveToFolder,
   loadLastSaveDir,
@@ -36,6 +36,7 @@ function init() {
   }
 
   $('btnSaveFolder').hidden = !canSaveToFolder;
+  $('guideFolder').hidden = !canSaveToFolder;
   if (!canSaveToFolder) $('saveHint').hidden = false;
   loadLastSaveDir();
 
@@ -244,7 +245,7 @@ async function onSaveZip() {
     });
     const zipName = `${plan.folderName}.zip`;
     downloadBlob(blob, zipName);
-    return `「${zipName}」をダウンロードしました。ZIP を展開してから「${XLSX_FILE_NAME}」を開いてください` +
+    return `「${zipName}」をダウンロードしました。ZIP を展開してから「${plan.xlsxFileName}」を開いてください` +
       '(展開せずに開くと、Excel のリンクから写真を開けません)。';
   }, 'ZIP を作成中…');
 }
@@ -262,7 +263,7 @@ async function runOutput(save, photoLabel) {
     const xlsx = await buildWorkbookBlob(state.album, plan, nowMs);
 
     const entries = [
-      { path: XLSX_FILE_NAME, data: xlsx },
+      { path: plan.xlsxFileName, data: xlsx },
       ...plan.photos.map((p) => ({ path: `${PHOTOS_DIR}/${p.fileName}`, data: p.bytes }))
     ];
     if ($('includeKmz').checked) entries.push({ path: plan.kmzFileName, data: state.album.kmzBytes });

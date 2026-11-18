@@ -101,9 +101,11 @@ export function buildFolderName(album, nowMs) {
   return `${formatJstDate(dateMs)}_${title}`;
 }
 
-// 出力の計画(フォルダ名・各写真の番号・名称・ファイル名・KMZ の保存名)を作る。
+// 出力の計画(フォルダ名・各写真の番号・名称・ファイル名・KMZ と Excel の保存名)を作る。
 // album.photos は出力順(撮影日時の昇順)に並んでいること。
 export function buildOutputPlan(album, nowMs) {
+  // 元の KMZ はファイル名をそのまま使う(念のため使えない文字だけ除く)
+  const kmzFileName = sanitizeName(album.fileName, 120) || 'original.kmz';
   const photos = album.photos.map((photo, i) => {
     const no = i + 1;
     return {
@@ -116,7 +118,8 @@ export function buildOutputPlan(album, nowMs) {
   return {
     folderName: buildFolderName(album, nowMs),
     photos,
-    // 元の KMZ はファイル名をそのまま使う(念のため使えない文字だけ除く)
-    kmzFileName: sanitizeName(album.fileName, 120) || 'original.kmz'
+    kmzFileName,
+    // Excel は KMZ と同じ名前にする(20261029-ようらく台園地.kmz → 20261029-ようらく台園地.xlsx)
+    xlsxFileName: `${baseNameOf(kmzFileName) || '写真一覧'}.xlsx`
   };
 }
