@@ -184,6 +184,12 @@ main {
   border-color: var(--accent-hover);
 }
 
+.btn-small {
+  min-height: 32px;
+  padding: 4px 12px;
+  font-size: 0.9rem;
+}
+
 .btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
@@ -470,6 +476,24 @@ main {
   width: 18px;
   height: 18px;
   accent-color: var(--accent);
+}
+
+/* 「フォルダに保存」の保存先 */
+.save-dir {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  margin-top: 12px;
+}
+
+.save-dir strong {
+  overflow-wrap: anywhere;
+}
+
+.save-dir strong.is-unset {
+  color: var(--muted);
+  font-weight: normal;
 }
 
 .actions {

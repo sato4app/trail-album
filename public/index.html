@@ -81,8 +81,11 @@
       <!-- 保存方法の使い分け(フォルダに保存できないブラウザでは、その項目を隠す: app.js) -->
       <ul class="save-guide">
         <li id="guideFolder">
-          <strong>フォルダに保存</strong>(Chrome・Edge): 選んだフォルダの中に、そのまま使える形で保存します。
+          <strong>フォルダに保存</strong>(Chrome・Edge): 保存先のフォルダの中に、そのまま使える形で保存します。
           パソコンにバックアップを残すときに向いています。
+          保存先は最初に1回選べば覚えておき、次からはそのまま保存します。
+          ブラウザを開き直した後の最初の保存では、書き込みを許可するか確かめられます。
+          そこで毎回許可するほうを選ぶと、次からは確かめられずに保存できます。
         </li>
         <li>
           <strong>ZIP でダウンロード</strong>(すべてのブラウザ): 1つの ZIP ファイルにまとめてダウンロードします。
@@ -93,6 +96,12 @@
         <input type="checkbox" id="includeKmz" checked>
         元の KMZ も一緒に保存する
       </label>
+      <!-- 「フォルダに保存」の保存先(フォルダに保存できないブラウザでは隠す: app.js) -->
+      <div class="save-dir" id="saveDirRow" hidden>
+        <span>保存先:</span>
+        <strong id="saveDirName" class="is-unset">未設定(初めて保存するときに選びます)</strong>
+        <button type="button" class="btn btn-small" id="btnChangeSaveDir">保存先を変更</button>
+      </div>
       <div class="actions">
         <button type="button" class="btn btn-primary" id="btnSaveFolder" hidden>フォルダに保存</button>
         <button type="button" class="btn" id="btnSaveZip">ZIP でダウンロード</button>

@@ -7,8 +7,10 @@ import { buildOutputPlan, formatJstDateTime } from './naming.js';
 import { buildWorkbookBlob, PHOTOS_DIR } from './excel-writer.js';
 import {
   canSaveToFolder,
-  loadLastSaveDir,
-  pickParentFolder,
+  loadSaveDir,
+  currentSaveDir,
+  pickSaveDir,
+  prepareSaveDir,
   saveToFolder,
   buildZipBlob,
   downloadBlob
@@ -37,8 +39,9 @@ function init() {
 
   $('btnSaveFolder').hidden = !canSaveToFolder;
   $('guideFolder').hidden = !canSaveToFolder;
+  $('saveDirRow').hidden = !canSaveToFolder;
   if (!canSaveToFolder) $('saveHint').hidden = false;
-  loadLastSaveDir();
+  loadSaveDir().then(updateSaveDirLabel);
 
   $('btnPickFile').addEventListener('click', () => $('fileInput').click());
   $('fileInput').addEventListener('change', (e) => {
@@ -49,6 +52,7 @@ function init() {
   setupDragAndDrop();
 
   $('btnSaveFolder').addEventListener('click', onSaveFolder);
+  $('btnChangeSaveDir').addEventListener('click', onChangeSaveDir);
   $('btnSaveZip').addEventListener('click', onSaveZip);
 
   const dialog = $('photoDialog');
@@ -214,18 +218,40 @@ function openPhoto(photo) {
 }
 
 // ===== 保存 =====
+// 保存先の表示(ブラウザからはフォルダの名前だけが分かり、場所(パス)は分からない)
+function updateSaveDirLabel() {
+  const dir = currentSaveDir();
+  $('saveDirName').textContent = dir ? dir.name : '未設定(初めて保存するときに選びます)';
+  $('saveDirName').classList.toggle('is-unset', !dir);
+}
+
+async function onChangeSaveDir() {
+  if (state.busy) return;
+  showResult('');
+  try {
+    const dir = await pickSaveDir();
+    if (dir) showResult(`保存先を「${dir.name}」にしました。`, 'ok');
+  } catch (err) {
+    showResult(err.message || '保存先を選べませんでした。', 'error');
+  } finally {
+    updateSaveDirLabel();
+  }
+}
+
 async function onSaveFolder() {
   if (!state.album || state.busy) return;
   showResult('');
-  // 保存先を選ぶ画面はボタンを押した直後に開く(Excel の作成より先に)
+  // 権限の確認や保存先を選ぶ画面は、ボタンを押した直後に出す(Excel の作成より先に)
   let parent;
   try {
-    parent = await pickParentFolder();
+    parent = await prepareSaveDir();
   } catch (err) {
-    showResult(err.message || '保存先を選べませんでした。', 'error');
+    showResult(err.message || '保存先を使えませんでした。', 'error');
     return;
+  } finally {
+    updateSaveDirLabel();
   }
-  if (!parent) return; // キャンセル
+  if (!parent) return; // 保存先を選ぶ画面でキャンセルされた
 
   await runOutput(async (plan, entries, onPhotoDone) => {
     const name = await saveToFolder(parent, plan.folderName, entries, (path) => {
@@ -289,7 +315,9 @@ async function runOutput(save, photoLabel) {
 // ===== 表示の切り替え =====
 function setBusy(busy) {
   state.busy = busy;
-  for (const id of ['btnPickFile', 'btnSaveFolder', 'btnSaveZip', 'includeKmz']) $(id).disabled = busy;
+  for (const id of ['btnPickFile', 'btnSaveFolder', 'btnChangeSaveDir', 'btnSaveZip', 'includeKmz']) {
+    $(id).disabled = busy;
+  }
   $('dropZone').classList.toggle('is-disabled', busy);
   document.body.classList.toggle('is-busy', busy);
 }

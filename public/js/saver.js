@@ -5,12 +5,16 @@
 // フォルダへ直接保存できるブラウザか(Chrome / Edge。安全な接続 https / localhost のときだけ使える)
 export const canSaveToFolder = typeof globalThis.showDirectoryPicker === 'function';
 
-// ===== 前回選んだ保存先(IndexedDB) =====
-// フォルダのハンドルは IndexedDB にそのまま保存できる。次回は保存先を選ぶ画面の初期位置にする
-// (書き込みの権限は保存先を選ぶ画面で改めて確認される)。
+// ===== 保存先(IndexedDB) =====
+// 保存先(出力フォルダを作る親フォルダ)は、最初に1回選べば覚えておき、次からは選ぶ画面を出さずに使う。
+// フォルダのハンドルは IndexedDB にそのまま保存できる。
+// 書き込みの権限はブラウザが管理する。同じ訪問のうち(このサイトのタブを全部閉じるまで)は、
+// 一度許可されれば確認なしで書き込める。次の訪問では requestPermission で改めて確認が出るが、
+// Chrome 122 以降はその確認で「毎回許可」を選べば、以後は確認なしで書き込める。
 const DB_NAME = 'trail-album';
 const STORE = 'settings';
-const LAST_DIR_KEY = 'lastSaveDir';
+const SAVE_DIR_KEY = 'lastSaveDir'; // 以前の版(前回の保存先を選ぶ画面の初期位置に使っていた)と同じキー
+const RW = { mode: 'readwrite' };
 
 function openDb() {
   return new Promise((resolve, reject) => {
@@ -34,50 +38,90 @@ async function dbRequest(mode, fn) {
   }
 }
 
-// 前回選んだ保存先(起動時に loadLastSaveDir で読み込んでおく)
-let lastSaveDir = null;
+// 保存先(起動時に loadSaveDir で読み込んでおく)。未設定なら null
+let saveDir = null;
 
-// 起動時に呼ぶ。保存先を選ぶ画面はボタンを押した直後に開く必要があるため、
-// IndexedDB の読み出し(非同期)は前もって済ませておく
-export async function loadLastSaveDir() {
-  if (!canSaveToFolder) return;
+// 起動時に呼ぶ。権限の確認や保存先を選ぶ画面はボタンを押した直後に出す必要があるため、
+// IndexedDB の読み出し(非同期)は前もって済ませておく。覚えている保存先(無ければ null)を返す。
+export async function loadSaveDir() {
+  if (!canSaveToFolder) return null;
   try {
-    lastSaveDir = (await dbRequest('readonly', (s) => s.get(LAST_DIR_KEY))) || null;
+    saveDir = (await dbRequest('readonly', (s) => s.get(SAVE_DIR_KEY))) || null;
   } catch {
-    lastSaveDir = null;
+    saveDir = null;
   }
+  return saveDir;
 }
 
-async function storeLastSaveDir(handle) {
-  lastSaveDir = handle;
+// 今の保存先(未設定なら null)
+export function currentSaveDir() {
+  return saveDir;
+}
+
+async function storeSaveDir(handle) {
+  saveDir = handle;
   try {
-    if (handle) await dbRequest('readwrite', (s) => s.put(handle, LAST_DIR_KEY));
-    else await dbRequest('readwrite', (s) => s.delete(LAST_DIR_KEY));
+    if (handle) await dbRequest('readwrite', (s) => s.put(handle, SAVE_DIR_KEY));
+    else await dbRequest('readwrite', (s) => s.delete(SAVE_DIR_KEY));
   } catch {
     // 覚えられなくても保存自体は続ける
   }
 }
 
 // ===== フォルダへ直接保存 =====
-// 保存先(出力フォルダを作る親フォルダ)を選ばせる。ボタンを押した直後に呼ぶこと
-// (間に時間のかかる処理を挟むと、利用者の操作によるものと見なされず止められる)。
-// キャンセルされたら null。
-export async function pickParentFolder() {
-  const options = { mode: 'readwrite' };
-  const startIn = lastSaveDir;
+// 保存先を選ぶ画面を出し、選ばれたフォルダを保存先として覚える。キャンセルされたら null。
+// ボタンを押した直後に呼ぶこと(間に時間のかかる処理を挟むと、利用者の操作によるものと見なされず止められる)。
+export async function pickSaveDir() {
+  const options = { ...RW };
+  const startIn = saveDir;
   if (startIn) options.startIn = startIn;
   try {
     const handle = await globalThis.showDirectoryPicker(options);
-    await storeLastSaveDir(handle);
+    await storeSaveDir(handle);
     return handle;
   } catch (err) {
     if (err?.name === 'AbortError') return null;
     if (startIn) {
-      // 覚えていた保存先が消えた・移動したなどで開けないときは、覚えた保存先を忘れる。
+      // 覚えていた保存先が消えた・移動したなどで画面を開けないときは、覚えた保存先を忘れる。
       // 画面はボタンを押した直後にしか開けないため、ここで開き直さず、もう一度押してもらう
-      await storeLastSaveDir(null);
-      throw new Error('保存先を選ぶ画面を開けませんでした。もう一度「フォルダに保存」を押してください。');
+      await storeSaveDir(null);
+      throw new Error('保存先を選ぶ画面を開けませんでした。もう一度ボタンを押してください。');
     }
+    throw err;
+  }
+}
+
+// 「フォルダに保存」を押した直後に呼び、書き込める保存先を返す。
+// - 保存先が未設定なら、保存先を選ぶ画面を出す(キャンセルされたら null)
+// - 保存先が決まっていれば、選ぶ画面は出さない。書き込みの権限がまだ無いとき(次の訪問など)だけ、
+//   ブラウザの確認を出す。許可されなければエラーを投げる
+// - 保存先のフォルダが移動・削除されていたら、覚えた保存先を忘れてエラーを投げる
+export async function prepareSaveDir() {
+  if (!saveDir) return pickSaveDir();
+  const dir = saveDir;
+  if ((await dir.queryPermission(RW)) !== 'granted' && (await dir.requestPermission(RW)) !== 'granted') {
+    throw new Error(
+      `保存先「${dir.name}」への書き込みが許可されませんでした。` +
+      'もう一度「フォルダに保存」を押して許可するか、「保存先を変更」で別のフォルダを選んでください。'
+    );
+  }
+  if (!(await dirExists(dir))) {
+    await storeSaveDir(null);
+    throw new Error(
+      `保存先のフォルダ「${dir.name}」が見つかりません(移動・削除された可能性があります)。` +
+      'もう一度「フォルダに保存」を押して、保存先を選び直してください。'
+    );
+  }
+  return dir;
+}
+
+// フォルダがまだあるか(中身の一覧を読み始めてみる)
+async function dirExists(dir) {
+  try {
+    await dir.keys().next();
+    return true;
+  } catch (err) {
+    if (err?.name === 'NotFoundError') return false;
     throw err;
   }
 }
