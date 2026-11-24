@@ -58,12 +58,13 @@
       <div class="load-status" id="loadStatus" role="status" aria-live="polite"></div>
     </section>
 
-    <!-- 2. プレビュー(読み込み後に表示)。左に KMZ、右に GPX の読み込み結果を並べる -->
+    <!-- 2. プレビュー(読み込み後に表示)。左に KMZ、右に GPX の読み込み結果を並べる。
+         間の境界線をドラッグすると、左右の幅の比率を変えられる(col-splitter.js) -->
     <section class="card" id="previewSection" aria-labelledby="previewTitle" hidden>
       <h2 id="previewTitle"><span class="step">2</span>内容を確かめる</h2>
-      <div class="preview-cols">
+      <div class="preview-cols" id="previewCols">
         <!-- KMZ(写真) -->
-        <section class="preview-col" aria-labelledby="kmzColTitle">
+        <section class="preview-col" id="kmzCol" aria-labelledby="kmzColTitle">
           <div class="col-head">
             <h3 class="col-title" id="kmzColTitle"><span class="kind-tag">KMZ</span>写真</h3>
             <button type="button" class="btn btn-small" id="btnClearKmz" hidden
@@ -93,8 +94,16 @@
           </div>
         </section>
 
+        <!-- KMZ と GPX の境界線(ドラッグ・左右の矢印キーで幅を変える。ダブルクリックで元の幅に戻す)。
+             つまみは画面の縦の真ん中に付いてくる(写真の一覧が長くても掴めるように) -->
+        <div class="col-splitter" id="colSplitter" role="separator" aria-orientation="vertical"
+          aria-controls="kmzCol" aria-label="KMZ と GPX の幅の境界" tabindex="0"
+          title="ドラッグすると KMZ と GPX の幅を変えられます（ダブルクリックで元の幅に戻ります）">
+          <span class="splitter-grip" aria-hidden="true"></span>
+        </div>
+
         <!-- GPX(移動経路) -->
-        <section class="preview-col" aria-labelledby="gpxColTitle">
+        <section class="preview-col preview-col-gpx" aria-labelledby="gpxColTitle">
           <div class="col-head">
             <h3 class="col-title" id="gpxColTitle"><span class="kind-tag">GPX</span>移動経路</h3>
             <button type="button" class="btn btn-small" id="btnClearGpx" hidden

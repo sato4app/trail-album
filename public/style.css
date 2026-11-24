@@ -284,24 +284,87 @@ main {
   margin-top: 6px;
 }
 
+/* 地図を表示しているときは、画面の幅いっぱいに広げる(左右にグレーの余白を出さない: app.js の showMap)。
+   KMZ の列は広げず、広がった分は GPX(地図)の列に回す(下の .preview-cols) */
+body.is-wide .inner {
+  max-width: none;
+}
+
 /* ===== プレビュー ===== */
-/* 左に KMZ、右に GPX の読み込み結果を並べ、間を縦線で区切る(狭い画面では上下に並べる) */
+/* 左に KMZ、右に GPX の読み込み結果を並べ、間を境界線(.col-splitter)で区切る(狭い画面では上下に並べる)。
+   KMZ の列の幅は --kmz-width。既定は、画面を広げる前と同じ幅(最大 463px。狭い画面では左右半分ずつ)。
+   境界線を動かすと col-splitter.js が px で書き換える。どちらの列も --col-min より狭くはしない */
 .preview-cols {
+  --kmz-width: min(463px, (100% - var(--splitter-width)) / 2);
+  --splitter-width: 40px;
+  --col-min: 280px;
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns:
+    clamp(var(--col-min), var(--kmz-width), 100% - var(--splitter-width) - var(--col-min))
+    var(--splitter-width)
+    minmax(0, 1fr);
 }
 
 .preview-col {
   min-width: 0;
 }
 
-.preview-col:first-child {
-  padding-right: 20px;
+/* 境界線: 真ん中に縦線を引き、幅全体を掴めるようにする */
+.col-splitter {
+  position: relative;
+  cursor: col-resize;
+  touch-action: none; /* タッチで動かしたときに、画面が動かないように */
+  user-select: none;
 }
 
-.preview-col + .preview-col {
-  padding-left: 20px;
-  border-left: 1px solid var(--border);
+.col-splitter::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 1px;
+  background: var(--border);
+  transform: translateX(-50%);
+  transition: background-color 0.15s, width 0.15s;
+}
+
+/* つまみ(画面の縦の真ん中に付いてくる) */
+.splitter-grip {
+  position: sticky;
+  top: calc(50vh - 22px);
+  display: block;
+  width: 10px;
+  height: 44px;
+  margin: 0 auto;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--surface);
+  transition: background-color 0.15s, border-color 0.15s;
+}
+
+.col-splitter:hover::before,
+.col-splitter:focus-visible::before,
+.col-splitter.is-dragging::before {
+  width: 3px;
+  background: var(--accent);
+}
+
+.col-splitter:hover .splitter-grip,
+.col-splitter:focus-visible .splitter-grip,
+.col-splitter.is-dragging .splitter-grip {
+  border-color: var(--accent);
+  background: var(--accent);
+}
+
+.col-splitter:focus-visible {
+  outline: none; /* 線とつまみの色で示す */
+}
+
+/* 動かしている間は、文字が選ばれたり、カーソルが変わったりしないように */
+body.is-resizing {
+  cursor: col-resize;
+  user-select: none;
 }
 
 @media (max-width: 720px) {
@@ -309,16 +372,14 @@ main {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .preview-col:first-child {
-    padding-right: 0;
+  .col-splitter {
+    display: none;
   }
 
-  .preview-col + .preview-col {
+  .preview-col-gpx {
     margin-top: 18px;
     padding-top: 16px;
-    padding-left: 0;
     border-top: 1px solid var(--border);
-    border-left: none;
   }
 }
 

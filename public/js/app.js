@@ -9,6 +9,7 @@ import { excludeLoadedPhotos, buildAlbum, addSegments, buildTrack } from './merg
 import { createThumbnail } from './thumbnail.js';
 import { canCopyImage, copyImage, saveImage, flashButton } from './photo-actions.js';
 import { canShowMap, updateMap, PHOTO_COLOR, trackColor } from './map-view.js';
+import { setupColSplitter } from './col-splitter.js';
 import { buildOutputPlan, formatJstDateTime, formatJstRange } from './naming.js';
 import { buildWorkbookBlob, PHOTOS_DIR } from './excel-writer.js';
 import {
@@ -61,6 +62,7 @@ function init() {
     loadFiles(files);
   });
   setupDragAndDrop();
+  setupColSplitter($('previewCols'), $('colSplitter'), $('kmzCol'));
   $('btnClearKmz').addEventListener('click', onClearKmz);
   $('btnClearGpx').addEventListener('click', onClearGpx);
 
@@ -382,6 +384,8 @@ function segmentRow(segment, label) {
 function showMap() {
   const hasData = state.photoRows.length > 0 || !!state.track;
   $('mapBlock').hidden = !hasData;
+  // 地図を出している間は、画面の幅いっぱいに広げる(広がった分は GPX・地図の列に回る: style.css)
+  document.body.classList.toggle('is-wide', hasData && canShowMap());
   if (!hasData) return;
   if (!canShowMap()) {
     $('map').hidden = true;

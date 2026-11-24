@@ -31,6 +31,9 @@ export function updateMap(container, { photos, tracks }) {
     map = L.map(container, { preferCanvas: true }).setView(INITIAL_CENTER, INITIAL_ZOOM);
     L.tileLayer(GSI_TILE_URL, { attribution: GSI_ATTRIBUTION, minZoom: 5, maxZoom: 18 }).addTo(map);
     markers = L.featureGroup().addTo(map);
+    // 地図の枠の大きさが変わったら(画面の幅いっぱいに広げた・KMZ と GPX の境界線を動かした)、
+    // 地図の中心を保ったまま描き直す(地図の画像の読み込みは、動かし終えてからまとめて行う)
+    new ResizeObserver(() => map.invalidateSize({ debounceMoveend: true })).observe(container);
   }
   map.invalidateSize(); // 隠れていた間に大きさが変わっていても合うように
   markers.clearLayers();
