@@ -242,7 +242,7 @@ function countPoints(segments) {
 function onClearKmz() {
   if (state.busy || state.kmzFiles.length === 0) return;
   state.kmzFiles = [];
-  showKmzPreview();
+  showKmzPreview({ fit: false }); // 地図の中心・縮尺は変えない
   showStatus([{ message: '読み込んだ KMZ をクリアしました。', kind: 'ok' }]);
 }
 
@@ -250,12 +250,12 @@ function onClearKmz() {
 function onClearGpx() {
   if (state.busy || state.segments.length === 0) return;
   state.segments = [];
-  showGpxPreview();
+  showGpxPreview({ fit: false }); // 地図の中心・縮尺は変えない
   showStatus([{ message: '読み込んだ GPX をクリアしました。', kind: 'ok' }]);
 }
 
-// 左側(KMZ)の表示を、読み込んだ KMZ(state.kmzFiles)から作り直す
-function showKmzPreview() {
+// 左側(KMZ)の表示を、読み込んだ KMZ(state.kmzFiles)から作り直す。fit は showMap と同じ
+function showKmzPreview({ fit = true } = {}) {
   for (const url of state.urls) URL.revokeObjectURL(url);
   state.urls = [];
   const album = buildAlbum(state.kmzFiles);
@@ -274,7 +274,7 @@ function showKmzPreview() {
     $('sumCount').textContent = `${album.photos.length} 枚`;
   }
   $('photoRows').replaceChildren(...state.photoRows.map(photoRow));
-  showMap();
+  showMap({ fit });
 }
 
 // 写真を KMZ ごと(a, b …)・撮影日時の順に並べ、No.(a-1, a-2 …)を label に付ける。
@@ -289,8 +289,8 @@ function labelPhotos(album, plan) {
   return [...groups.values()].flatMap((g) => g.photos);
 }
 
-// 右側(GPX)の表示を、読み込んだ経路(state.segments)から作り直す
-function showGpxPreview() {
+// 右側(GPX)の表示を、読み込んだ経路(state.segments)から作り直す。fit は showMap と同じ
+function showGpxPreview({ fit = true } = {}) {
   const track = buildTrack(state.segments);
   state.track = track;
 
@@ -312,7 +312,7 @@ function showGpxPreview() {
     segmentGroupRow(gpxLetter(i), f.source.fileName, trackColor(i)),
     ...f.segments.map((segment, j) => segmentRow(segment, `${gpxLetter(i)}-${j + 1}`))
   ]));
-  showMap();
+  showMap({ fit });
 }
 
 // KMZ・GPX のどちらかを読み込んでいるときだけ「内容を確かめる」を出す
@@ -380,8 +380,9 @@ function segmentRow(segment, label) {
 
 // ===== 地図 =====
 // 写真の撮影場所と、移動経路の記録地点をすべてマーカーで出す(KMZ・GPX のどちらかがあるときだけ)。
+// fit が false なら、地図の中心・縮尺は今のままにする(KMZ・GPX をクリアしたとき)。
 // 「内容を確かめる」が表示されてから呼ぶこと(隠れていると地図の大きさを測れない)
-function showMap() {
+function showMap({ fit = true } = {}) {
   const hasData = state.photoRows.length > 0 || !!state.track;
   $('mapBlock').hidden = !hasData;
   // 地図を出している間は、画面の幅いっぱいに広げる(広がった分は GPX・地図の列に回る: style.css)
@@ -406,7 +407,7 @@ function showMap() {
         timeLabel: p.timeMs !== null ? formatJstDateTime(p.timeMs) : ''
       }))
     })))
-  });
+  }, { fit });
 
   // 凡例: 写真の撮影場所と、GPX(A, B …)ごとの記録地点の色
   const legend = [];
