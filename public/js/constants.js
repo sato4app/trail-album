@@ -33,7 +33,7 @@ export const FIT_MAX_ZOOM = 17;
 // いちばん端の地点と、地図の縁との間(px。マーカーの円が縁で切れないように)
 export const FIT_PADDING = 24;
 
-// マーカーと線の色。写真は1色、経路は GPX ごとに順に使い、足りなければ繰り返す(表の A, B … の印と同じ色)
+// マーカーと線の色。写真は1色、経路は GPX ごとに順に使い、足りなければ繰り返す(表の 1, 2 … の印と同じ色)
 export const PHOTO_COLOR = '#e8590c';
 export const TRACK_COLORS = ['#1c7ed6', '#7048e8', '#0c8599', '#d6336c', '#5c940d', '#495057'];
 

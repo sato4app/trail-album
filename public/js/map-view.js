@@ -25,7 +25,7 @@ import {
   TRACK_LINE_OPACITY
 } from './constants.js';
 
-// GPX ごとの色(表の A, B … の印と同じ色。足りなければ繰り返す)
+// GPX ごとの色(表の 1, 2 … の印と同じ色。足りなければ繰り返す)
 export const trackColor = (index) => TRACK_COLORS[index % TRACK_COLORS.length];
 
 let map = null;
@@ -40,8 +40,9 @@ export const canShowMap = () => !!globalThis.L;
 // 地図のマーカーを置き直し、すべてのマーカーが収まるように地図を合わせる(fitToArea)。
 // fit が false なら、地図の中心・縮尺は今のままにする(KMZ・GPX をクリアしたとき)。
 // container は表示されていること(隠れていると地図の大きさを測れない)。
-//   photos:  [{ lat, lng, label, name }](写真の撮影場所)
-//   tracks:  [{ label, colorIndex, points: [{ lat, lng, timeLabel }] }](経路ごとの記録地点)
+//   photos:  [{ lat, lng, no, name, timeLabel }](写真の撮影場所。no は写真の通し番号、timeLabel は撮影日時)
+//   tracks:  [{ label, colorIndex, points: [{ lat, lng, timeLabel }] }](経路ごとの記録地点。label は 2-1 などの経路の番号、
+//            timeLabel は記録日時)。日時が無ければ timeLabel は ''
 export function updateMap(container, { photos, tracks }, { fit = true } = {}) {
   const L = globalThis.L;
   if (!L) return;
@@ -73,27 +74,28 @@ export function updateMap(container, { photos, tracks }, { fit = true } = {}) {
   markers.clearLayers();
 
   // 経路の線と記録地点(写真の下に描く。先に加えたものほど下になる)。
-  // 線は経路(A-1, A-2 …)ごとに引き、別の経路どうしはつながない
+  // 線は経路(1-1, 1-2 …)ごとに引き、別の経路どうしはつながない。
+  // マウスを乗せたときの表示は、線は「移動経路 2-1」、記録地点は「移動経路 2-1 の38点目」と記録日時の2行
   for (const track of tracks) {
     const color = trackColor(track.colorIndex);
     L.polyline(track.points.map((p) => [p.lat, p.lng]), { color, weight: TRACK_LINE_WEIGHT, opacity: TRACK_LINE_OPACITY })
-      .bindTooltip(track.label, { sticky: true })
+      .bindTooltip(`移動経路 ${track.label}`, { sticky: true })
       .addTo(markers);
   }
   for (const track of tracks) {
     const color = trackColor(track.colorIndex);
     track.points.forEach((p, i) => {
       L.circleMarker([p.lat, p.lng], { radius: TRACK_POINT_RADIUS, weight: 1, color, fillColor: color, fillOpacity: 0.85 })
-        .bindTooltip(`${track.label} の ${i + 1} 点目${p.timeLabel ? `  ${p.timeLabel}` : ''}`)
+        .bindTooltip(() => tooltipLines([`移動経路 ${track.label} の${i + 1}点目`, p.timeLabel]))
         .addTo(markers);
     });
   }
-  // 写真の撮影場所
+  // 写真の撮影場所。マウスを乗せたときの表示は「写真No.13」・名称・撮影日時の3行
   for (const photo of photos) {
     L.circleMarker([photo.lat, photo.lng], {
       radius: PHOTO_MARKER_RADIUS, weight: 2, color: '#fff', fillColor: PHOTO_COLOR, fillOpacity: 1
     })
-      .bindTooltip(`${photo.label}  ${photo.name}`)
+      .bindTooltip(() => tooltipLines([`写真No.${photo.no}`, photo.name, photo.timeLabel]))
       .addTo(markers);
   }
 
@@ -112,7 +114,21 @@ export function updateMap(container, { photos, tracks }, { fit = true } = {}) {
   fitToArea();
 }
 
-// 地図を fitArea に合わせる: 範囲の真ん中を地図の中心にし、範囲がすべて収まるいちばん大きいズームレベル
+// マウスを乗せたときの表示の中身: lines を1行ずつ並べる(空の行は出さない)。
+// 名称は利用者が付けた文字なので、HTML として解釈させずに文字のまま出す。
+// 記録地点は数千になることもあるため、表示するときに初めて作る(bindTooltip に関数で渡す)
+function tooltipLines(lines) {
+  const div = document.createElement('div');
+  for (const text of lines) {
+    if (!text) continue;
+    const line = document.createElement('div');
+    line.textContent = text;
+    div.append(line);
+  }
+  return div;
+}
+
+// 地図を fitArea に合わせる:範囲の真ん中を地図の中心にし、範囲がすべて収まるいちばん大きいズームレベル
 // (ZOOM_SNAP 刻み。FIT_MAX_ZOOM まで。MAP_MIN_ZOOM でも収まらなければ MAP_MIN_ZOOM)にする。最も北・南の地点が地図の上端・下端に、または最も西・東の地点が
 // 左端・右端に、縁から FIT_PADDING の内側で届く(地図は正方形なので、範囲の縦横比により、どちらか一方が届く)
 function fitToArea() {

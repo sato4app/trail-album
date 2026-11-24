@@ -10,7 +10,7 @@ import { createThumbnail } from './thumbnail.js';
 import { canCopyImage, copyImage, saveImage, flashButton } from './photo-actions.js';
 import { canShowMap, updateMap, trackColor } from './map-view.js';
 import { setupColSplitter } from './col-splitter.js';
-import { buildOutputPlan, formatJstDateTime, formatJstRange } from './naming.js';
+import { buildOutputPlan, formatJstDateTime, formatJstDateTimeSeconds, formatJstRange } from './naming.js';
 import { buildWorkbookBlob } from './excel-writer.js';
 import { PHOTO_COLOR, PHOTOS_DIR } from './constants.js';
 import {
@@ -32,7 +32,7 @@ const state = {
   album: null,     // kmzFiles をまとめたもの(merge.js の buildAlbum の結果)。KMZ が無ければ null
   segments: [],    // 読み込んだ GPX の経路(merge.js の addSegments で重なりを除いたもの。読み込んだ順)
   track: null,     // segments をまとめたもの(merge.js の buildTrack の結果。表示だけに使う)
-  photoRows: [],   // 写真の一覧に出している写真(No. の a-1 … を付けたもの。地図にも使う)
+  photoRows: [],   // 写真の一覧に出している写真(保存の順。No. は保存の通し番号 no。地図にも使う)
   urls: [],        // プレビューで作った画像の URL(写真の一覧を作り直すときに解放する)
   busy: false      // 読み込み中・保存中
 };
@@ -275,29 +275,18 @@ function showKmzPreview({ fit = true } = {}) {
   showResult('');
   updatePreviewSection();
 
-  state.photoRows = album ? labelPhotos(album, buildOutputPlan(album, Date.now())) : [];
+  // 写真は保存の順(すべての KMZ を通した撮影日時の順)に並べ、No. は保存するファイル名・Excel と同じ通し番号にする
+  state.photoRows = album ? buildOutputPlan(album, Date.now()).photos : [];
   if (album) {
     // KMZ ごとの写真の枚数(読み込み済みの写真と同じものを除いた、一覧に出している枚数)
     $('sumFile').replaceChildren(...album.files.map((f, i) =>
-      fileLine(fileLetter(i), f.fileName, PHOTO_COLOR, [`${f.photos.length} 枚`])
+      fileLine(fileNo(i), f.fileName, PHOTO_COLOR, [`${f.photos.length} 枚`])
     ));
     $('sumCount').textContent = `${album.photos.length} 枚`;
     $('sumCountItem').hidden = album.files.length < 2; // 1つならファイルの行と同じ数なので出さない
   }
   $('photoRows').replaceChildren(...state.photoRows.map(photoRow));
   showMap({ fit });
-}
-
-// 写真を KMZ ごと(a, b …)・撮影日時の順に並べ、No.(a-1, a-2 …)を label に付ける。
-// plan(buildOutputPlan の結果。保存するファイル名などを持つ)の photos は album.photos と同じ順で対応する
-function labelPhotos(album, plan) {
-  const groups = new Map(album.files.map((file, i) => [file, { letter: fileLetter(i), photos: [] }]));
-  const fileOf = new Map(album.files.flatMap((file) => file.photos.map((photo) => [photo, file])));
-  album.photos.forEach((photo, i) => {
-    const group = groups.get(fileOf.get(photo));
-    group.photos.push({ ...plan.photos[i], label: `${group.letter}-${group.photos.length + 1}` });
-  });
-  return [...groups.values()].flatMap((g) => g.photos);
 }
 
 // 右側(GPX)の表示を、読み込んだ経路(state.segments)から作り直す。fit は showMap と同じ
@@ -312,7 +301,7 @@ function showGpxPreview({ fit = true } = {}) {
 
   if (track) {
     // GPX ごとの記録地点数(経路数)・移動距離(読み込み済みの経路と同じものを除いた、内訳に出している経路の分)
-    $('gpxFile').replaceChildren(...track.files.map((f, i) => fileLine(gpxLetter(i), f.source.fileName, trackColor(i), [
+    $('gpxFile').replaceChildren(...track.files.map((f, i) => fileLine(fileNo(i), f.source.fileName, trackColor(i), [
       formatPoints(f.segments),
       formatDistance(f.segments.reduce((sum, s) => sum + s.distanceM, 0))
     ])));
@@ -322,10 +311,10 @@ function showGpxPreview({ fit = true } = {}) {
     $('gpxPointsItem').hidden = single;
     $('gpxDistanceItem').hidden = single;
   }
-  // 経路ごとの内訳: GPX ごとに、ファイル名の行と、その経路(A-1, A-2 …)の行を並べる
+  // 経路ごとの内訳: GPX ごとに、ファイル名の行と、その経路(1-1, 1-2 …)の行を並べる
   $('segRows').replaceChildren(...(track?.files ?? []).flatMap((f, i) => [
-    segmentGroupRow(gpxLetter(i), f.source.fileName, trackColor(i)),
-    ...f.segments.map((segment, j) => segmentRow(segment, `${gpxLetter(i)}-${j + 1}`))
+    segmentGroupRow(fileNo(i), f.source.fileName, trackColor(i)),
+    ...f.segments.map((segment, j) => segmentRow(segment, segmentNo(i, j)))
   ]));
   showMap({ fit });
 }
@@ -335,25 +324,18 @@ function updatePreviewSection() {
   $('previewSection').hidden = !state.album && !state.track;
 }
 
-// KMZ の記号: a, b, … z, aa, ab …(GPX は大文字: gpxLetter)
-function fileLetter(index) {
-  let letters = '';
-  for (let n = index + 1; n > 0; n = Math.floor((n - 1) / 26)) {
-    letters = String.fromCharCode(97 + ((n - 1) % 26)) + letters;
-  }
-  return letters;
-}
+// KMZ・GPX の番号(それぞれ 1, 2, 3 …)。経路の番号は、GPX の番号と GPX の中での順番(1-1, 1-2, 2-1 …)
+const fileNo = (index) => String(index + 1);
+const segmentNo = (fileIndex, segmentIndex) => `${fileIndex + 1}-${segmentIndex + 1}`;
 
-const gpxLetter = (index) => fileLetter(index).toUpperCase();
-
-// ファイル名の行: 左に a, b … / A, B … の記号(色は地図のマーカーの色)とファイル名、
+// ファイル名の行: 左に番号(色は地図のマーカーの色)とファイル名、
 // 右にファイルごとの数(stats: 写真の枚数、記録地点数・移動距離)。数は行どうしで列をそろえる(style.css の .file-list)
-function fileLine(letter, name, color, stats) {
+function fileLine(no, name, color, stats) {
   const div = document.createElement('div');
   div.className = 'file-line';
   const nameEl = document.createElement('span');
   nameEl.className = 'file-name';
-  nameEl.append(fileBadge(letter, color), name);
+  nameEl.append(fileBadge(no, color), name);
   div.append(nameEl, ...stats.map((text) => {
     const span = document.createElement('span');
     span.className = 'file-stat';
@@ -363,11 +345,11 @@ function fileLine(letter, name, color, stats) {
   return div;
 }
 
-function fileBadge(letter, color) {
+function fileBadge(no, color) {
   const badge = document.createElement('span');
   badge.className = 'file-badge';
   badge.style.backgroundColor = color;
-  badge.textContent = letter;
+  badge.textContent = no;
   return badge;
 }
 
@@ -377,17 +359,17 @@ function formatDistance(meters) {
 }
 
 // 経路ごとの内訳の、GPX のファイル名の行
-function segmentGroupRow(letter, name, color) {
+function segmentGroupRow(no, name, color) {
   const tr = document.createElement('tr');
   tr.className = 'group-row';
   const th = document.createElement('th');
   th.colSpan = 4;
-  th.append(fileBadge(letter, color), name);
+  th.append(fileBadge(no, color), name);
   tr.append(th);
   return tr;
 }
 
-// 経路ごとの内訳の、経路の行(No. は A-1 など)
+// 経路ごとの内訳の、経路の行(No. は 1-1 など)
 function segmentRow(segment, label) {
   const tr = document.createElement('tr');
   const hasTime = segment.startMs !== null;
@@ -420,23 +402,23 @@ function showMap({ fit = true } = {}) {
   }
 
   const files = state.track?.files ?? [];
+  // マーカーに出す日時は、KMZ・GPX に記録された日時(日本時間。秒まで)
+  const timeLabel = (ms) => (Number.isFinite(ms) ? formatJstDateTimeSeconds(ms) : '');
   updateMap($('map'), {
-    photos: state.photoRows.map((p) => ({ lat: p.lat, lng: p.lng, label: p.label, name: p.displayName })),
+    photos: state.photoRows.map((p) => ({
+      lat: p.lat, lng: p.lng, no: p.no, name: p.displayName, timeLabel: timeLabel(p.timeMs)
+    })),
     tracks: files.flatMap((f, i) => f.segments.map((segment, j) => ({
-      label: `${gpxLetter(i)}-${j + 1}`,
+      label: segmentNo(i, j),
       colorIndex: i,
-      points: segment.points.map((p) => ({
-        lat: p.lat,
-        lng: p.lng,
-        timeLabel: p.timeMs !== null ? formatJstDateTime(p.timeMs) : ''
-      }))
+      points: segment.points.map((p) => ({ lat: p.lat, lng: p.lng, timeLabel: timeLabel(p.timeMs) }))
     })))
   }, { fit });
 
-  // 凡例: 写真の撮影場所と、GPX(A, B …)ごとの記録地点の色
+  // 凡例: 写真の撮影場所と、GPX(1, 2 …)ごとの記録地点の色
   const legend = [];
   if (state.photoRows.length > 0) legend.push(legendItem(PHOTO_COLOR, `写真の撮影場所(${state.photoRows.length} 枚)`, 'is-photo'));
-  files.forEach((f, i) => legend.push(legendItem(trackColor(i), `${gpxLetter(i)} の移動経路・記録地点`, 'is-track')));
+  files.forEach((f, i) => legend.push(legendItem(trackColor(i), `GPX ${fileNo(i)} の移動経路・記録地点`, 'is-track')));
   $('mapLegend').replaceChildren(...legend);
 }
 
@@ -464,7 +446,7 @@ function cell(text, className) {
   return td;
 }
 
-// 写真の一覧の1行: 1列目に No.(a-1 など)・名称・撮影日時・緯度, 経度を1行ずつ、2列目に写真、
+// 写真の一覧の1行: 1列目に No.(保存の通し番号)・名称・撮影日時・緯度, 経度を1行ずつ、2列目に写真、
 // 3列目にボタン(拡大表示・写真をコピー・写真を保存)
 function photoRow(photo) {
   const tr = document.createElement('tr');
@@ -477,7 +459,7 @@ function photoRow(photo) {
     infoCell.append(div);
     return div;
   };
-  line(`No.${photo.label}`, 'info-no');
+  line(`No.${photo.no}`, 'info-no');
   const nameLine = line(photo.displayName, 'info-name');
   if (!photo.name) nameLine.classList.add('is-fallback');
   nameLine.title = `保存するファイル名: ${photo.fileName}`;
@@ -537,7 +519,7 @@ function actionButton(photo, label, title, disabledReason, onClick) {
   button.textContent = label;
   button.title = disabledReason || title;
   button.disabled = !!disabledReason;
-  button.setAttribute('aria-label', `${label}: No.${photo.label} ${photo.displayName}`);
+  button.setAttribute('aria-label', `${label}: No.${photo.no} ${photo.displayName}`);
   button.addEventListener('click', () => onClick(button));
   return button;
 }
@@ -560,7 +542,7 @@ function openPhoto(photo) {
   $('dialogImage').src = photo.fullUrl;
   $('dialogImage').alt = photo.displayName;
   const time = Number.isFinite(photo.timeMs) ? `  ${formatJstDateTime(photo.timeMs)}` : '';
-  $('dialogCaption').textContent = `No.${photo.label}  ${photo.displayName}${time}`;
+  $('dialogCaption').textContent = `No.${photo.no}  ${photo.displayName}${time}`;
   $('photoDialog').showModal();
 }
 

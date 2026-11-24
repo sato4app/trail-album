@@ -9,7 +9,7 @@ export const JST_OFFSET_MS = 9 * 60 * 60 * 1000;
 const pad2 = (n) => String(n).padStart(2, '0');
 export const pad3 = (n) => String(n).padStart(3, '0');
 
-// 日本時間の年・月・日・時・分
+// 日本時間の年・月・日・時・分・秒
 function jstParts(ms) {
   const d = new Date(ms + JST_OFFSET_MS);
   return {
@@ -17,7 +17,8 @@ function jstParts(ms) {
     mo: pad2(d.getUTCMonth() + 1),
     d: pad2(d.getUTCDate()),
     h: pad2(d.getUTCHours()),
-    mi: pad2(d.getUTCMinutes())
+    mi: pad2(d.getUTCMinutes()),
+    s: pad2(d.getUTCSeconds())
   };
 }
 
@@ -42,6 +43,11 @@ export function startsWithDate(name) {
 export function formatJstDateTime(ms) {
   const p = jstParts(ms);
   return `${p.y}/${p.mo}/${p.d} ${p.h}:${p.mi}`;
+}
+
+// 2026/11/18 10:32:15(地図のマーカーの表示用。KMZ・GPX に記録された日時を、秒まで日本時間で出す)
+export function formatJstDateTimeSeconds(ms) {
+  return `${formatJstDateTime(ms)}:${jstParts(ms).s}`;
 }
 
 // 2026/11/18 10:32〜12:45(画面表示用。日をまたぐときは終わりにも日付を付ける)

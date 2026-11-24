@@ -96,7 +96,7 @@ export function addSegments(loaded, track) {
 
 // 読み込んだ経路(loaded。読み込んだ順)を GPX ごとにまとめる。何も無ければ null。
 //   { files: [{ source, segments }], segmentCount, pointCount, distanceM }
-// - files は、いちばん早く記録した経路の順(画面の A, B … の順)。source は readGpx の結果
+// - files は、いちばん早く記録した経路の順(画面の 1, 2 … の順)。source は readGpx の結果
 // - 各 GPX の segments は記録の日時の順(記録時刻の無い経路は、読み込んだ順で末尾)
 export function buildTrack(loaded) {
   if (loaded.length === 0) return null;

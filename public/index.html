@@ -72,13 +72,13 @@
           </div>
           <p class="preview-empty" id="kmzEmpty">KMZ ファイルは読み込んでいません。</p>
           <div id="kmzPreview" hidden>
-            <!-- 概要: ファイル名(a, b … の記号付き)と、ファイルごとの写真の枚数(app.js の fileLine)。
+            <!-- 概要: ファイル名(1, 2 … の番号付き)と、ファイルごとの写真の枚数(app.js の fileLine)。
                  合計は KMZ が2つ以上のときだけ出す(1つならファイルの行と同じ数になるため) -->
             <dl class="summary">
               <div class="summary-files"><dt>KMZ ファイル</dt><dd class="file-list" id="sumFile"></dd></div>
               <div id="sumCountItem"><dt>写真の枚数(合計)</dt><dd id="sumCount"></dd></div>
             </dl>
-            <p class="hint">KMZ(a, b …)ごとに、撮影日時の順に並べています。写真を押しても、元の写真を大きく表示します。</p>
+            <p class="hint">すべての KMZ を通した撮影日時の順に並べています。No. は、保存する写真のファイル名と Excel の No. と同じ番号です。写真を押しても、元の写真を大きく表示します。</p>
             <div class="table-wrap">
               <table class="data-table photo-table">
                 <thead>
@@ -112,7 +112,7 @@
           </div>
           <p class="preview-empty" id="gpxEmpty">GPX ファイルは読み込んでいません。</p>
           <div id="gpxPreview" hidden>
-            <!-- 概要: ファイル名(A, B … の記号付き)と、ファイルごとの記録地点数(経路数)・移動距離(app.js の fileLine)。
+            <!-- 概要: ファイル名(1, 2 … の番号付き)と、ファイルごとの記録地点数(経路数)・移動距離(app.js の fileLine)。
                  合計は GPX が2つ以上のときだけ出す(1つならファイルの行と同じ数になるため) -->
             <dl class="summary">
               <div class="summary-files"><dt>GPX ファイル</dt><dd class="file-list file-list-gpx" id="gpxFile"></dd></div>
@@ -120,7 +120,7 @@
               <div id="gpxDistanceItem"><dt>移動距離(合計)</dt><dd id="gpxDistance"></dd></div>
             </dl>
             <p class="hint">GPX は内容を確かめるためだけに読み込みます(保存する内容には含みません)。</p>
-            <!-- 経路ごとの内訳(GPX ごとに、ファイル名の行の下へ A-1, A-2 … と並べる) -->
+            <!-- 経路ごとの内訳(GPX ごとに、ファイル名の行の下へ 1-1, 1-2 … と並べる) -->
             <h4 class="sub-title">経路ごとの内訳</h4>
             <div class="table-wrap">
               <table class="data-table seg-table">
