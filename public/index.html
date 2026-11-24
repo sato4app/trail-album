@@ -34,41 +34,86 @@
   </header>
 
   <main class="inner">
-    <!-- 1. KMZ の選択 -->
+    <!-- 1. KMZ・GPX の選択(KMZ と GPX を一緒に選んでもよい) -->
     <section class="card" aria-labelledby="selectTitle">
-      <h2 id="selectTitle"><span class="step">1</span>KMZ ファイルを選ぶ</h2>
+      <h2 id="selectTitle"><span class="step">1</span>KMZ, GPX ファイルを選ぶ</h2>
       <div class="drop-zone" id="dropZone">
-        <p class="drop-lead">ここに KMZ ファイルをドラッグ＆ドロップ</p>
+        <p class="drop-lead">ここに KMZ, GPX ファイルをドラッグ＆ドロップ</p>
         <p class="drop-or">または</p>
-        <button type="button" class="btn btn-primary" id="btnPickFile">KMZ ファイルを選ぶ</button>
-        <input type="file" id="fileInput" accept=".kmz" hidden>
+        <button type="button" class="btn btn-primary" id="btnPickFile">KMZ, GPX ファイルを選ぶ</button>
+        <p class="drop-note">KMZ(写真)と GPX(移動経路)は、2つ一緒に選ぶこともできます。</p>
+        <input type="file" id="fileInput" accept=".kmz,.gpx" multiple hidden>
       </div>
-      <p class="message" id="loadStatus" role="status" aria-live="polite"></p>
+      <!-- 読み込みの結果(1ファイル1行: app.js の showStatus) -->
+      <div class="load-status" id="loadStatus" role="status" aria-live="polite"></div>
     </section>
 
-    <!-- 2. プレビュー(読み込み後に表示) -->
+    <!-- 2. プレビュー(読み込み後に表示)。左に KMZ、右に GPX の読み込み結果を並べる -->
     <section class="card" id="previewSection" aria-labelledby="previewTitle" hidden>
       <h2 id="previewTitle"><span class="step">2</span>内容を確かめる</h2>
-      <dl class="summary">
-        <div><dt>KMZ ファイル</dt><dd id="sumFile"></dd></div>
-        <div><dt>Document 名</dt><dd id="sumTitle"></dd></div>
-        <div><dt>写真の枚数</dt><dd id="sumCount"></dd></div>
-        <div><dt>出力フォルダ名(予定)</dt><dd id="sumFolder"></dd></div>
-      </dl>
-      <p class="hint">並び順は出力と同じ(撮影日時の順)です。写真を押すと元の写真を大きく表示します。</p>
-      <div class="table-wrap">
-        <table class="photo-table">
-          <thead>
-            <tr>
-              <th class="col-no" scope="col">No.</th>
-              <th class="col-thumb" scope="col">写真</th>
-              <th class="col-name" scope="col">名称</th>
-              <th class="col-time" scope="col">撮影日時</th>
-              <th class="col-pos" scope="col">緯度, 経度</th>
-            </tr>
-          </thead>
-          <tbody id="photoRows"></tbody>
-        </table>
+      <div class="preview-cols">
+        <!-- KMZ(写真) -->
+        <section class="preview-col" aria-labelledby="kmzColTitle">
+          <h3 class="col-title" id="kmzColTitle"><span class="kind-tag">KMZ</span>写真</h3>
+          <p class="preview-empty" id="kmzEmpty">KMZ ファイルは読み込んでいません。</p>
+          <div id="kmzPreview" hidden>
+            <dl class="summary">
+              <div><dt>KMZ ファイル</dt><dd id="sumFile"></dd></div>
+              <div><dt>Document 名</dt><dd id="sumTitle"></dd></div>
+              <div><dt>写真の枚数</dt><dd id="sumCount"></dd></div>
+              <div><dt>出力フォルダ名(予定)</dt><dd id="sumFolder"></dd></div>
+            </dl>
+            <p class="hint">並び順は出力と同じ(撮影日時の順)です。写真を押すと元の写真を大きく表示します。</p>
+            <div class="table-wrap">
+              <table class="data-table photo-table">
+                <thead>
+                  <tr>
+                    <th class="col-no" scope="col">No.</th>
+                    <th class="col-thumb" scope="col">写真</th>
+                    <th class="col-name" scope="col">名称</th>
+                    <th class="col-time" scope="col">撮影日時</th>
+                    <th class="col-pos" scope="col">緯度, 経度</th>
+                  </tr>
+                </thead>
+                <tbody id="photoRows"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- GPX(移動経路) -->
+        <section class="preview-col" aria-labelledby="gpxColTitle">
+          <h3 class="col-title" id="gpxColTitle"><span class="kind-tag">GPX</span>移動経路</h3>
+          <p class="preview-empty" id="gpxEmpty">GPX ファイルは読み込んでいません。</p>
+          <div id="gpxPreview" hidden>
+            <dl class="summary">
+              <div><dt>GPX ファイル</dt><dd id="gpxFile"></dd></div>
+              <div><dt>トラック名</dt><dd id="gpxTitle"></dd></div>
+              <div><dt>記録地点数</dt><dd id="gpxPoints"></dd></div>
+              <div><dt>移動距離</dt><dd id="gpxDistance"></dd></div>
+              <div><dt>記録の日時</dt><dd id="gpxTime"></dd></div>
+              <div><dt>所要時間</dt><dd id="gpxDuration"></dd></div>
+            </dl>
+            <p class="hint">GPX は内容を確かめるためだけに読み込みます(保存する内容には含みません)。</p>
+            <!-- 経路が2本以上のときだけ、経路ごとの内訳を出す -->
+            <div id="segBlock" hidden>
+              <h4 class="seg-title">経路ごとの内訳</h4>
+              <div class="table-wrap">
+                <table class="data-table seg-table">
+                  <thead>
+                    <tr>
+                      <th class="col-no" scope="col">No.</th>
+                      <th class="col-time" scope="col">記録の日時</th>
+                      <th class="col-num" scope="col">地点数</th>
+                      <th class="col-num" scope="col">移動距離</th>
+                    </tr>
+                  </thead>
+                  <tbody id="segRows"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </section>
       </div>
     </section>
 

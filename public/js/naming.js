@@ -45,6 +45,14 @@ export function formatJstDateTime(ms) {
   return `${p.y}/${p.mo}/${p.d} ${p.h}:${p.mi}`;
 }
 
+// 2026/11/18 10:32〜12:45(画面表示用。日をまたぐときは終わりにも日付を付ける)
+export function formatJstRange(startMs, endMs) {
+  const s = jstParts(startMs);
+  const e = jstParts(endMs);
+  const sameDay = s.y === e.y && s.mo === e.mo && s.d === e.d;
+  return `${formatJstDateTime(startMs)}〜${sameDay ? `${e.h}:${e.mi}` : formatJstDateTime(endMs)}`;
+}
+
 // 20261118-1032(写真のファイル名用)
 function formatJstCompact(ms) {
   const p = jstParts(ms);

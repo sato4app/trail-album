@@ -5,6 +5,7 @@
 //   files/photo-001.jpg … 写真本体(doc.kml の description から <img src> で参照する)
 // 他のアプリの KMZ にも備え、「位置(Point)と、KMZ 内の画像への参照(description の <img src>)を
 // 持つ Placemark」を写真として読めるだけ読む。ZIP の展開は JSZip(CDN)に任せる(無圧縮・Deflate とも読める)。
+import { parseXml, firstChild, firstDescendant, allDescendants, textOf } from './xml-utils.js';
 
 // 利用者に理由を伝えるためのエラー(メッセージをそのまま画面に出す)
 export class KmzError extends Error {
@@ -40,23 +41,6 @@ function detectImageFormat(bytes, path) {
   const ext = (path.split('.').pop() || '').toLowerCase();
   if (EXT_TYPES[ext]) return { ext: ext === 'jpeg' ? 'jpg' : ext, type: EXT_TYPES[ext] };
   return null;
-}
-
-// ===== XML の読み取り(名前空間の接頭辞が付いていても読めるよう localName で比べる) =====
-function childElements(el) {
-  return Array.from(el.childNodes).filter((n) => n.nodeType === 1);
-}
-
-function firstChild(el, localName) {
-  return childElements(el).find((c) => c.localName === localName) || null;
-}
-
-function firstDescendant(el, localName) {
-  return el.getElementsByTagNameNS('*', localName)[0] || null;
-}
-
-function textOf(el) {
-  return el ? el.textContent.trim() : '';
 }
 
 // KML の置き場所(baseDir)からの相対パスを、ZIP 内のパスに直す(./ と ../ を解決する)
@@ -104,7 +88,7 @@ export async function readKmz(file) {
   const findEntry = (path) => byName.get(path) || byLowerName.get(path.toLowerCase()) || null;
 
   const photos = [];
-  const placemarks = Array.from(doc.getElementsByTagNameNS('*', 'Placemark'));
+  const placemarks = allDescendants(doc, 'Placemark');
   for (const pm of placemarks) {
     // 位置: <Point><coordinates>経度,緯度[,標高]</coordinates></Point>
     const point = firstDescendant(pm, 'Point');
@@ -159,18 +143,6 @@ export async function readKmz(file) {
     title: documentTitle(doc),
     photos: sortPhotos(photos)
   };
-}
-
-// XML を解析する。壊れていれば null
-function parseXml(text) {
-  let doc;
-  try {
-    doc = new DOMParser().parseFromString(text, 'application/xml');
-  } catch {
-    return null;
-  }
-  if (!doc || !doc.documentElement || doc.getElementsByTagName('parsererror').length > 0) return null;
-  return doc;
 }
 
 // タイトル: Document 直下の <name>(無ければ最初の Folder 直下の <name>)

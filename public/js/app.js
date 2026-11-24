@@ -1,9 +1,11 @@
 // Trail Album のエントリポイント(画面の制御)
 // KMZ を読み込んでプレビューを表示し、写真の一覧の Excel(KMZ と同じ名前の .xlsx)と
 // 元の画質の写真を、フォルダへ直接保存するか、ZIP でダウンロードする。処理はすべてブラウザの中で行う。
+// GPX(移動経路)も読み込めるが、今は内容の表示だけで、保存する内容には含めない。
 import { readKmz, KmzError } from './kmz-reader.js';
+import { readGpx, GpxError } from './gpx-reader.js';
 import { createThumbnail } from './thumbnail.js';
-import { buildOutputPlan, formatJstDateTime } from './naming.js';
+import { buildOutputPlan, formatJstDateTime, formatJstRange } from './naming.js';
 import { buildWorkbookBlob, PHOTOS_DIR } from './excel-writer.js';
 import {
   canSaveToFolder,
@@ -21,6 +23,7 @@ const $ = (id) => document.getElementById(id);
 
 const state = {
   album: null,     // 読み込んだ KMZ(kmz-reader.js の readKmz の結果)
+  track: null,     // 読み込んだ GPX(gpx-reader.js の readGpx の結果。表示だけに使う)
   urls: [],        // プレビューで作った画像の URL(次の KMZ を読み込んだときに解放する)
   busy: false      // 読み込み中・保存中
 };
@@ -30,10 +33,10 @@ init();
 function init() {
   // CDN のライブラリが読み込めていなければ、操作できないことを伝える
   if (!globalThis.JSZip || !globalThis.ExcelJS) {
-    showStatus(
-      '必要なライブラリを読み込めませんでした。インターネットに接続していることを確かめてから、ページを再読み込みしてください。',
-      'error'
-    );
+    showStatus([{
+      message: '必要なライブラリを読み込めませんでした。インターネットに接続していることを確かめてから、ページを再読み込みしてください。',
+      kind: 'error'
+    }]);
     $('btnPickFile').disabled = true;
     return;
   }
@@ -46,9 +49,9 @@ function init() {
 
   $('btnPickFile').addEventListener('click', () => $('fileInput').click());
   $('fileInput').addEventListener('change', (e) => {
-    const file = e.target.files?.[0];
+    const files = Array.from(e.target.files || []);
     e.target.value = ''; // 同じファイルを続けて選んでも change が起きるように
-    if (file) loadFile(file);
+    loadFiles(files);
   });
   setupDragAndDrop();
 
@@ -80,7 +83,7 @@ function init() {
 
 // ===== ドラッグ＆ドロップ =====
 // ページのどこに落としても受け付ける(受け付け領域から外れて落とすと、
-// ブラウザが KMZ をダウンロードしてしまうため)。
+// ブラウザが KMZ をダウンロードしたり、GPX をページの代わりに開いたりしてしまうため)。
 function setupDragAndDrop() {
   const zone = $('dropZone');
   let depth = 0;
@@ -107,42 +110,105 @@ function setupDragAndDrop() {
     depth = 0;
     zone.classList.remove('is-over');
     if (state.busy) return;
-    const files = Array.from(e.dataTransfer.files);
-    if (files.length === 0) return;
-    loadFile(files[0], files.length > 1);
+    loadFiles(Array.from(e.dataTransfer.files));
   });
 }
 
-// ===== KMZ の読み込み =====
-async function loadFile(file, hadMultiple = false) {
+// ===== KMZ・GPX の読み込み =====
+// 選んだ(置いた)ファイルから、KMZ と GPX をそれぞれ1つずつ読み込む。
+// KMZ と GPX の表示は別々に置き換え、片方だけ読み込んだときは、もう片方の表示をそのまま残す。
+async function loadFiles(files) {
   // 保存の確認を出している間は読み込まない(確認した内容と違うものを保存しないように)
-  if (state.busy || $('confirmDialog').open) return;
+  if (files.length === 0 || state.busy || $('confirmDialog').open) return;
   setBusy(true);
-  showStatus(`「${file.name}」を読み込み中…`);
+  const results = []; // 読み込みの結果(1ファイル1行)
+  const progress = (message) => showStatus([...results, { message }]);
   try {
-    const album = await readKmz(file);
-    const total = album.photos.length;
-    for (let i = 0; i < total; i++) {
-      showStatus(`サムネイルを作成中… ${i + 1} / ${total}`);
-      const photo = album.photos[i];
-      photo.blob = new Blob([photo.bytes], { type: photo.type });
-      photo.thumb = await createThumbnail(photo.blob);
+    const { kmz, gpx, unknown } = await sortFiles(files);
+    if (kmz.length > 0) results.push(await loadKmz(kmz[0], kmz.length > 1, progress));
+    if (gpx.length > 0) results.push(await loadGpx(gpx[0], gpx.length > 1, progress));
+    if (unknown.length > 0) {
+      const names = unknown.map((f) => `「${f.name}」`).join('');
+      results.push({ message: `${names}は KMZ, GPX ファイルではないため、読み込みませんでした。`, kind: 'error' });
     }
-    replacePreview(album);
-    const note = hadMultiple ? '(複数のファイルが置かれたため、最初の1つだけを読み込みました)' : '';
-    showStatus(`「${file.name}」を読み込みました。写真は ${total} 枚です。${note}`, 'ok');
   } catch (err) {
-    // 読み込めなかったときは、前のプレビューをそのまま残す
-    const message = err instanceof KmzError ? err.message : `読み込みに失敗しました(${err.message || err})。`;
-    showStatus(`「${file.name}」: ${message}`, 'error');
     console.error(err);
+    results.push({ message: `読み込みに失敗しました(${err.message || err})。`, kind: 'error' });
   } finally {
+    showStatus(results);
     setBusy(false);
   }
 }
 
-// 前のプレビューを置き換える
-function replacePreview(album) {
+// ファイルを KMZ・GPX・それ以外に分ける(並びは選んだ順のまま)
+async function sortFiles(files) {
+  const sorted = { kmz: [], gpx: [], unknown: [] };
+  for (const file of files) sorted[(await fileKind(file)) || 'unknown'].push(file);
+  return sorted;
+}
+
+// ファイルの種類('kmz' | 'gpx' | null)。拡張子で決め、拡張子で分からないとき
+// (拡張子が無い・.xml になっているなど)は中身の先頭で見分ける
+async function fileKind(file) {
+  if (/\.kmz$/i.test(file.name)) return 'kmz';
+  if (/\.gpx$/i.test(file.name)) return 'gpx';
+  let head;
+  try {
+    head = new TextDecoder().decode(await file.slice(0, 1024).arrayBuffer());
+  } catch {
+    return null;
+  }
+  if (/<gpx[\s>]/.test(head)) return 'gpx';
+  // ZIP の印(PK)で始まり、最初に入っているファイルが KML なら KMZ
+  // (Excel の .xlsx なども ZIP なので、ZIP というだけでは KMZ とみなさない)
+  if (head.startsWith('PK') && /\.kml/i.test(head)) return 'kmz';
+  return null;
+}
+
+// KMZ を読み込み、左側(KMZ)の表示を置き換える。結果の1行({ message, kind })を返す。
+// 読み込めなかったときは、前の表示をそのまま残す
+async function loadKmz(file, hadMultiple, progress) {
+  progress(`「${file.name}」を読み込み中…`);
+  try {
+    const album = await readKmz(file);
+    const total = album.photos.length;
+    for (let i = 0; i < total; i++) {
+      progress(`「${file.name}」のサムネイルを作成中… ${i + 1} / ${total}`);
+      const photo = album.photos[i];
+      photo.blob = new Blob([photo.bytes], { type: photo.type });
+      photo.thumb = await createThumbnail(photo.blob);
+    }
+    showKmzPreview(album);
+    const note = hadMultiple ? '(KMZ ファイルが複数あったため、最初の1つだけを読み込みました)' : '';
+    return { message: `「${file.name}」を読み込みました。写真は ${total} 枚です。${note}`, kind: 'ok' };
+  } catch (err) {
+    console.error(err);
+    const message = err instanceof KmzError ? err.message : `読み込みに失敗しました(${err.message || err})。`;
+    return { message: `「${file.name}」: ${message}`, kind: 'error' };
+  }
+}
+
+// GPX を読み込み、右側(GPX)の表示を置き換える。結果の1行({ message, kind })を返す。
+// 読み込めなかったときは、前の表示をそのまま残す
+async function loadGpx(file, hadMultiple, progress) {
+  progress(`「${file.name}」を読み込み中…`);
+  try {
+    const track = await readGpx(file);
+    showGpxPreview(track);
+    const note = hadMultiple ? '(GPX ファイルが複数あったため、最初の1つだけを読み込みました)' : '';
+    return {
+      message: `「${file.name}」を読み込みました。記録地点は ${pointsText(track)}です。${note}`,
+      kind: 'ok'
+    };
+  } catch (err) {
+    console.error(err);
+    const message = err instanceof GpxError ? err.message : `読み込みに失敗しました(${err.message || err})。`;
+    return { message: `「${file.name}」: ${message}`, kind: 'error' };
+  }
+}
+
+// 左側(KMZ)の表示を置き換える
+function showKmzPreview(album) {
   for (const url of state.urls) URL.revokeObjectURL(url);
   state.urls = [];
   state.album = album;
@@ -154,9 +220,62 @@ function replacePreview(album) {
   $('sumFolder').textContent = plan.folderName;
 
   $('photoRows').replaceChildren(...plan.photos.map(photoRow));
+  $('kmzEmpty').hidden = true;
+  $('kmzPreview').hidden = false;
   $('previewSection').hidden = false;
-  $('outputSection').hidden = false;
+  $('outputSection').hidden = false; // 保存するのは KMZ の内容なので、KMZ を読み込んでから出す
   showResult('');
+}
+
+// 右側(GPX)の表示を置き換える
+function showGpxPreview(track) {
+  state.track = track;
+  const hasTime = track.startMs !== null;
+  $('gpxFile').textContent = track.fileName;
+  $('gpxTitle').textContent = track.title || '(なし)';
+  $('gpxPoints').textContent = pointsText(track);
+  $('gpxDistance').textContent = formatDistance(track.distanceM);
+  $('gpxTime').textContent = hasTime ? formatJstRange(track.startMs, track.endMs) : '(記録時刻なし)';
+  $('gpxDuration').textContent = hasTime ? formatDuration(track.endMs - track.startMs) : '(なし)';
+
+  $('segBlock').hidden = track.segments.length < 2;
+  $('segRows').replaceChildren(...track.segments.map(segmentRow));
+  $('gpxEmpty').hidden = true;
+  $('gpxPreview').hidden = false;
+  $('previewSection').hidden = false;
+}
+
+// 1,234 点(2 経路)。経路が1本なら経路の数は省く
+function pointsText(track) {
+  const routes = track.segments.length > 1 ? `(${track.segments.length} 経路)` : '';
+  return `${track.pointCount.toLocaleString('ja-JP')} 点${routes}`;
+}
+
+// 8.4 km(minoh-hiking の統計表と同じく小数点以下1位)
+function formatDistance(meters) {
+  return `${(meters / 1000).toFixed(1)} km`;
+}
+
+// 2時間13分 / 45分
+function formatDuration(ms) {
+  const minutes = Math.round(ms / 60000);
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return h > 0 ? `${h}時間${m}分` : `${m}分`;
+}
+
+function segmentRow(segment, i) {
+  const tr = document.createElement('tr');
+  const hasTime = segment.startMs !== null;
+  const timeCell = cell(hasTime ? formatJstRange(segment.startMs, segment.endMs) : '(なし)', 'col-time');
+  if (!hasTime) timeCell.classList.add('is-empty');
+  tr.append(
+    cell(String(i + 1), 'col-no'),
+    timeCell,
+    cell(`${segment.points.length.toLocaleString('ja-JP')} 点`, 'col-num'),
+    cell(formatDistance(segment.distanceM), 'col-num')
+  );
+  return tr;
 }
 
 function objectUrl(blob) {
@@ -445,10 +564,16 @@ function setBusy(busy) {
   document.body.classList.toggle('is-busy', busy);
 }
 
-function showStatus(message, kind = 'info') {
-  const el = $('loadStatus');
-  el.textContent = message;
-  el.dataset.kind = kind;
+// 読み込みの結果を出す。lines は [{ message, kind }](1ファイル1行。kind は省くと 'info')。
+// KMZ と GPX を一緒に読み込んだとき、片方だけ失敗しても、それぞれの結果が分かるよう行を分ける
+function showStatus(lines) {
+  $('loadStatus').replaceChildren(...lines.map(({ message, kind = 'info' }) => {
+    const p = document.createElement('p');
+    p.className = 'message';
+    p.dataset.kind = kind;
+    p.textContent = message;
+    return p;
+  }));
 }
 
 function showResult(message, kind = 'info') {

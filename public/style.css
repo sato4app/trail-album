@@ -202,7 +202,7 @@ main {
   outline-offset: 2px;
 }
 
-/* ===== KMZ の選択 ===== */
+/* ===== KMZ・GPX の選択 ===== */
 .drop-zone {
   display: flex;
   flex-direction: column;
@@ -227,6 +227,12 @@ main {
 .drop-or {
   color: var(--muted);
   font-size: 0.9rem;
+}
+
+.drop-zone .drop-note {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 0.85rem;
 }
 
 .drop-zone.is-over {
@@ -273,10 +279,84 @@ main {
   color: var(--error);
 }
 
+/* 読み込みの結果(1ファイル1行) */
+.load-status .message + .message {
+  margin-top: 6px;
+}
+
 /* ===== プレビュー ===== */
+/* 左に KMZ、右に GPX の読み込み結果を並べ、間を縦線で区切る(狭い画面では上下に並べる) */
+.preview-cols {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.preview-col {
+  min-width: 0;
+  /* 写真の一覧の表示を、画面の幅ではなく列の幅で切り替える(下の @container) */
+  container-type: inline-size;
+}
+
+.preview-col:first-child {
+  padding-right: 20px;
+}
+
+.preview-col + .preview-col {
+  padding-left: 20px;
+  border-left: 1px solid var(--border);
+}
+
+@media (max-width: 720px) {
+  .preview-cols {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .preview-col:first-child {
+    padding-right: 0;
+  }
+
+  .preview-col + .preview-col {
+    margin-top: 18px;
+    padding-top: 16px;
+    padding-left: 0;
+    border-top: 1px solid var(--border);
+    border-left: none;
+  }
+}
+
+.col-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 12px;
+  font-size: 1rem;
+}
+
+/* KMZ・GPX の見出しの印 */
+.kind-tag {
+  padding: 1px 8px;
+  border-radius: 4px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+/* まだ読み込んでいないとき */
+.preview-empty {
+  margin: 0;
+  padding: 24px 12px;
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  color: var(--muted);
+  font-size: 0.9rem;
+  text-align: center;
+}
+
 .summary {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
   gap: 8px 20px;
   margin: 0 0 14px;
 }
@@ -296,26 +376,28 @@ main {
   overflow-wrap: anywhere;
 }
 
+/* 表が収まらないときは、表の中だけを横に動かせるようにする */
 .table-wrap {
   border: 1px solid var(--border);
   border-radius: 8px;
-  overflow: hidden;
+  overflow-x: auto;
 }
 
-.photo-table {
+/* 表の共通(写真の一覧・経路ごとの内訳) */
+.data-table {
   width: 100%;
   border-collapse: collapse;
 }
 
-.photo-table th,
-.photo-table td {
+.data-table th,
+.data-table td {
   padding: 8px 12px;
   border-bottom: 1px solid var(--border);
   text-align: left;
   vertical-align: middle;
 }
 
-.photo-table thead th {
+.data-table thead th {
   background: var(--surface-sub);
   color: var(--muted);
   font-size: 0.85rem;
@@ -323,16 +405,42 @@ main {
   white-space: nowrap;
 }
 
-.photo-table tbody tr:last-child td {
+.data-table tbody tr:last-child td {
   border-bottom: none;
 }
 
-.photo-table .col-no {
+.data-table .col-no {
   width: 3.5em;
   text-align: right;
   color: var(--muted);
   font-variant-numeric: tabular-nums;
 }
+
+.data-table td.is-fallback,
+.data-table td.is-empty {
+  color: var(--muted);
+  font-weight: 400;
+}
+
+/* 経路ごとの内訳(GPX) */
+.seg-title {
+  margin: 14px 0 6px;
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.seg-table .col-time {
+  font-variant-numeric: tabular-nums;
+}
+
+.seg-table .col-num {
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 写真の一覧(KMZ) */
 
 .photo-table .col-thumb {
   width: 112px;
@@ -347,12 +455,6 @@ main {
 .photo-table .col-pos {
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
-}
-
-.photo-table td.is-fallback,
-.photo-table td.is-empty {
-  color: var(--muted);
-  font-weight: 400;
 }
 
 .thumb-button {
@@ -393,12 +495,15 @@ main {
   text-align: center;
 }
 
-/* スマートフォン: 表を1枚ずつのカードにする */
+/* スマートフォン: カードの余白を詰める */
 @media (max-width: 640px) {
   .card {
     padding: 16px 14px 18px;
   }
+}
 
+/* 列が狭いとき(KMZ と GPX を左右に並べたとき・スマートフォン): 写真の一覧を1枚ずつのカードにする */
+@container (max-width: 640px) {
   .photo-table thead {
     display: none;
   }
