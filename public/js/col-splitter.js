@@ -3,18 +3,19 @@
 // 決めた幅はこのブラウザに覚えておき、次に開いたときも使う。
 //   ドラッグ: 境界線(どこを掴んでもよい)を左右に動かす
 //   キーボード: 境界線にフォーカスして ← → (Shift を押しながらだと大きく動かす)
-//   ダブルクリック・Home: 元の幅(style.css の --kmz-width の既定)に戻す
-// どちらの列も COL_MIN より狭くはしない(style.css の --col-min と同じ値)。
+//   ダブルクリック・Home: 元の幅(KMZ_COL_DEFAULT_WIDTH。画面が狭ければ左右半分ずつ)に戻す
+// どちらの列も COL_MIN_WIDTH より狭くはしない。
+// 幅の設定値は constants.js に置き、列の並べ方を決める style.css へは CSS 変数(--col-min・--kmz-default-width)で渡す。
+import { KMZ_COL_DEFAULT_WIDTH, COL_MIN_WIDTH, SPLITTER_KEY_STEP, SPLITTER_KEY_STEP_LARGE } from './constants.js';
 
 const STORAGE_KEY = 'trail-album.kmzColWidth';
-const COL_MIN = 280;
-const KEY_STEP = 20;
-const KEY_STEP_LARGE = 80;
 
 // cols: 列を並べる要素(.preview-cols)、splitter: 境界線、leftCol: 左(KMZ)の列
 export function setupColSplitter(cols, splitter, leftCol) {
-  const maxWidth = () => cols.clientWidth - splitter.offsetWidth - COL_MIN;
-  const clampWidth = (px) => Math.round(Math.max(COL_MIN, Math.min(px, maxWidth())));
+  cols.style.setProperty('--col-min', `${COL_MIN_WIDTH}px`);
+  cols.style.setProperty('--kmz-default-width', `${KMZ_COL_DEFAULT_WIDTH}px`);
+  const maxWidth = () => cols.clientWidth - splitter.offsetWidth - COL_MIN_WIDTH;
+  const clampWidth = (px) => Math.round(Math.max(COL_MIN_WIDTH, Math.min(px, maxWidth())));
 
   // 左の列の幅を px で決める(null なら元の幅に戻す)
   const setWidth = (px) => {
@@ -82,7 +83,7 @@ export function setupColSplitter(cols, splitter, leftCol) {
   });
 
   splitter.addEventListener('keydown', (e) => {
-    const step = e.shiftKey ? KEY_STEP_LARGE : KEY_STEP;
+    const step = e.shiftKey ? SPLITTER_KEY_STEP_LARGE : SPLITTER_KEY_STEP;
     let width;
     if (e.key === 'ArrowLeft') width = clampWidth(leftCol.offsetWidth - step);
     else if (e.key === 'ArrowRight') width = clampWidth(leftCol.offsetWidth + step);

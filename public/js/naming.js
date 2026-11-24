@@ -1,11 +1,10 @@
 // フォルダ名・ファイル名の作成と、Windows で使えない文字の除去
 // 日時はすべて日本時間で扱う。端末のタイムゾーン設定に左右されないよう、
 // 9時間ずらした時刻を UTC として読み出す(getUTC〜)。
+// 名前の最大文字数は constants.js に置く。
+import { MAX_NAME_LENGTH, MAX_KMZ_NAME_LENGTH } from './constants.js';
 
 export const JST_OFFSET_MS = 9 * 60 * 60 * 1000;
-
-// 名称部分の最大文字数(長すぎるとパス全体が Windows の上限に近づくため)
-export const MAX_NAME_LENGTH = 40;
 
 const pad2 = (n) => String(n).padStart(2, '0');
 export const pad3 = (n) => String(n).padStart(3, '0');
@@ -133,7 +132,7 @@ function uniqueFileNames(names) {
 // kmzFileNames は album.files と同じ順の、元の KMZ の保存名。
 export function buildOutputPlan(album, nowMs) {
   // 元の KMZ はファイル名をそのまま使う(念のため使えない文字だけ除き、同じ名前が重なれば番号を付ける)
-  const kmzFileNames = uniqueFileNames(album.files.map((f) => sanitizeName(f.fileName, 120) || 'original.kmz'));
+  const kmzFileNames = uniqueFileNames(album.files.map((f) => sanitizeName(f.fileName, MAX_KMZ_NAME_LENGTH) || 'original.kmz'));
   const photos = album.photos.map((photo, i) => {
     const no = i + 1;
     return {

@@ -8,10 +8,11 @@ import { readGpx, GpxError } from './gpx-reader.js';
 import { excludeLoadedPhotos, buildAlbum, addSegments, buildTrack } from './merge.js';
 import { createThumbnail } from './thumbnail.js';
 import { canCopyImage, copyImage, saveImage, flashButton } from './photo-actions.js';
-import { canShowMap, updateMap, PHOTO_COLOR, trackColor } from './map-view.js';
+import { canShowMap, updateMap, trackColor } from './map-view.js';
 import { setupColSplitter } from './col-splitter.js';
 import { buildOutputPlan, formatJstDateTime, formatJstRange } from './naming.js';
-import { buildWorkbookBlob, PHOTOS_DIR } from './excel-writer.js';
+import { buildWorkbookBlob } from './excel-writer.js';
+import { PHOTO_COLOR, PHOTOS_DIR } from './constants.js';
 import {
   canSaveToFolder,
   loadSaveDir,

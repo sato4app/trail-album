@@ -292,12 +292,12 @@ body.is-wide .inner {
 
 /* ===== プレビュー ===== */
 /* 左に KMZ、右に GPX の読み込み結果を並べ、間を境界線(.col-splitter)で区切る(狭い画面では上下に並べる)。
-   KMZ の列の幅は --kmz-width。既定は、画面を広げる前と同じ幅(最大 463px。狭い画面では左右半分ずつ)。
-   境界線を動かすと col-splitter.js が px で書き換える。どちらの列も --col-min より狭くはしない */
+   KMZ の列の幅は --kmz-width。既定は --kmz-default-width(狭い画面では左右半分ずつ)。
+   境界線を動かすと col-splitter.js が px で書き換える。どちらの列も --col-min より狭くはしない。
+   --kmz-default-width と --col-min の値は constants.js に置き、col-splitter.js がこの要素に設定する */
 .preview-cols {
-  --kmz-width: min(463px, (100% - var(--splitter-width)) / 2);
+  --kmz-width: min(var(--kmz-default-width), (100% - var(--splitter-width)) / 2);
   --splitter-width: 40px;
-  --col-min: 280px;
   display: grid;
   grid-template-columns:
     clamp(var(--col-min), var(--kmz-width), 100% - var(--splitter-width) - var(--col-min))
@@ -601,8 +601,15 @@ body.is-resizing {
   font-weight: 400;
 }
 
+/* 写真の大きさは、右の4つのボタンを縦に並べた高さ(ボタンの高さ × 4 + 間 × 3)に合わせる */
+.photo-table {
+  --mini-btn-height: 26px;
+  --mini-btn-gap: 4px;
+  --thumb-size: calc(var(--mini-btn-height) * 4 + var(--mini-btn-gap) * 3);
+}
+
 .photo-table .col-thumb {
-  width: 112px;
+  width: calc(var(--thumb-size) + 24px); /* 写真と、左右の余白(12px ずつ) */
 }
 
 /* 写真の右のボタン(拡大表示・縮小版をコピー・画像をコピー・画像を保存)を縦に並べる */
@@ -614,13 +621,14 @@ body.is-resizing {
 .photo-actions {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--mini-btn-gap);
 }
 
 .btn-mini {
   width: 100%;
-  min-height: 26px;
-  padding: 2px 10px;
+  height: var(--mini-btn-height);
+  min-height: 0;
+  padding: 0 10px;
   border-radius: 6px;
   font-size: 0.8rem;
   white-space: nowrap;
@@ -638,8 +646,8 @@ body.is-resizing {
 
 .thumb-button img {
   display: block;
-  width: 88px;
-  height: 88px;
+  width: var(--thumb-size);
+  height: var(--thumb-size);
   object-fit: cover;
   border-radius: 6px;
   background: var(--surface-sub);
@@ -653,8 +661,8 @@ body.is-resizing {
 .thumb-missing {
   display: grid;
   place-items: center;
-  width: 88px;
-  height: 88px;
+  width: var(--thumb-size);
+  height: var(--thumb-size);
   padding: 6px;
   border-radius: 6px;
   background: var(--surface-sub);
@@ -674,15 +682,54 @@ body.is-resizing {
   isolation: isolate;
 }
 
-/* 地図の右下のズームレベル(縮尺の目盛りの上。目盛りと同じ見た目にする: map-view.js) */
-.map .map-zoom-level {
-  margin-bottom: 2px;
-  padding: 0 5px;
-  background: rgb(255 255 255 / 80%);
+/* 地図の右下のズームレベル(縮尺の目盛りの上): 「Z=16.3」のボタンと、押すとその右に開くスライドバー(map-view.js)。
+   地図の上に重ねるので、ダークモードでも白地にする(Leaflet の「＋」「−」ボタンと同じ見た目) */
+.map .map-zoom {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
+.map .map-zoom-button {
+  min-width: 52px;
+  padding: 2px 6px;
+  border: 2px solid rgb(0 0 0 / 20%);
+  border-radius: 4px;
+  background: #fff;
+  background-clip: padding-box;
   color: #333;
-  font-size: 11px;
-  line-height: 1.6;
-  white-space: nowrap;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.4;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+
+.map .map-zoom-button:hover {
+  background-color: #f4f4f4;
+}
+
+.map .map-zoom-button[aria-expanded="true"] {
+  border-color: var(--accent);
+}
+
+.map .map-zoom-button:focus-visible,
+.map .map-zoom-slider:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.map .map-zoom-slider {
+  width: 150px;
+  max-width: 40vw;
+  margin: 0;
+  padding: 4px 8px;
+  border-radius: 4px;
+  background: rgb(255 255 255 / 90%);
+  accent-color: var(--accent);
+  cursor: pointer;
 }
 
 .map-legend {
@@ -748,14 +795,13 @@ body.is-resizing {
     padding-right: 8px;
   }
 
-  .photo-table .col-thumb {
-    width: 80px;
+  /* 写真はボタンの高さに合わせず小さくする(合わせると、情報の列が狭くなりすぎるため) */
+  .photo-table {
+    --thumb-size: 64px;
   }
 
-  .thumb-button img,
-  .thumb-missing {
-    width: 64px;
-    height: 64px;
+  .photo-table .col-thumb {
+    width: calc(var(--thumb-size) + 16px); /* 写真と、左右の余白(8px ずつ) */
   }
 }
 

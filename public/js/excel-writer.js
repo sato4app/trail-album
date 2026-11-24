@@ -1,20 +1,28 @@
 // Excel ファイル(.xlsx)の作成(ExcelJS を CDN から読み込んで使う)
 // ファイル名は KMZ と同じ名前にする(naming.js の buildOutputPlan の xlsxFileName)。
 // シート「写真一覧」に写真1枚を1行で並べ、シート「情報」に元の KMZ の情報を書く。
+// アプリ名・写真のフォルダ名・フォント・縮小版の表示枠などの設定値は constants.js に置く。
 import { JST_OFFSET_MS } from './naming.js';
+import {
+  APP_NAME,
+  PHOTOS_DIR,
+  EXCEL_FONT_NAME,
+  EXCEL_FONT_SIZE,
+  EXCEL_THUMB_BOX_PX,
+  EXCEL_THUMB_MARGIN_PX,
+  EXCEL_PHOTO_COL_WIDTH
+} from './constants.js';
 
-export const PHOTOS_DIR = 'photos';
 const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
-const APP_NAME = 'Trail Album';
-const INFO_NOTE = '元の画質の写真は photos フォルダにあります。Excel に埋め込んだ画像は縮小版です。';
+const INFO_NOTE = `元の画質の写真は ${PHOTOS_DIR} フォルダにあります。Excel に埋め込んだ画像は縮小版です。`;
 
 // ===== サムネイルの配置 =====
 // サムネイルは「写真」列(B列)のセルの内側に収め、縦横比を保ったまま表示枠に合わせて縮める。
 // 配置は「セルに合わせて移動やサイズ変更をする」(twoCell)にする。並べ替えで行と一緒に動き、
 // オートフィルターで行を隠したときも画像が一緒に隠れる(「移動するがサイズ変更はしない」では隠れない)。
-const THUMB_BOX_PX = 150;       // 表示枠(長辺の最大 px)
-const THUMB_MARGIN_PX = 8;      // 画像の上下の余白(px)
-const PHOTO_COL_WIDTH = 25;     // B列の幅(文字数)。約175px で、左右に約12px の余白ができる
+const THUMB_BOX_PX = EXCEL_THUMB_BOX_PX;       // 表示枠(長辺の最大 px)
+const THUMB_MARGIN_PX = EXCEL_THUMB_MARGIN_PX; // 画像の上下の余白(px)
+const PHOTO_COL_WIDTH = EXCEL_PHOTO_COL_WIDTH; // B列の幅(文字数)
 const NO_THUMB_ROW_HEIGHT = 30; // サムネイルを作れなかった行の高さ(pt)
 const EMU_PER_PX = 9525;        // Excel の図形の位置の単位(EMU)。96dpi で 1px = 9525EMU
 const PT_PER_PX = 0.75;         // 行の高さはポイント単位。96dpi で 1px = 0.75pt
@@ -26,7 +34,7 @@ function columnWidthToPx(width) {
 }
 
 // ===== 書式 =====
-const FONT = { name: '游ゴシック', size: 11 };
+const FONT = { name: EXCEL_FONT_NAME, size: EXCEL_FONT_SIZE };
 const HEADER_FONT = { ...FONT, bold: true };
 const LINK_FONT = { ...FONT, color: { argb: 'FF0563C1' }, underline: true };
 const MUTED_FONT = { ...FONT, color: { argb: 'FF888888' } };

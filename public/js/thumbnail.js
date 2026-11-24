@@ -2,9 +2,8 @@
 // 画面のプレビューと、Excel に埋め込む縮小版の両方に使う。
 // 長辺 約400px の JPEG にする(Excel ファイルが重くならないように)。
 // 元の写真(photos フォルダに保存するもの)には手を加えない。
-
-export const THUMB_LONG_SIDE = 400;
-const JPEG_QUALITY = 0.85;
+// 長辺の長さと JPEG の品質は constants.js に置く。
+import { THUMB_LONG_SIDE, THUMB_JPEG_QUALITY } from './constants.js';
 
 // 画像(Blob)を縮小した JPEG を作る。
 // 戻り値: { blob, bytes(Uint8Array), width, height }。表示できない形式なら null。
@@ -31,7 +30,7 @@ export async function createThumbnail(blob) {
     ctx.imageSmoothingQuality = 'high';
     ctx.drawImage(source.image, 0, 0, width, height);
 
-    const thumbBlob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', JPEG_QUALITY));
+    const thumbBlob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', THUMB_JPEG_QUALITY));
     if (!thumbBlob) return null;
     return {
       blob: thumbBlob,
