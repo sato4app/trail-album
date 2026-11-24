@@ -644,6 +644,17 @@ body.is-resizing {
   isolation: isolate;
 }
 
+/* 地図の右下のズームレベル(縮尺の目盛りの上。目盛りと同じ見た目にする: map-view.js) */
+.map .map-zoom-level {
+  margin-bottom: 2px;
+  padding: 0 5px;
+  background: rgb(255 255 255 / 80%);
+  color: #333;
+  font-size: 11px;
+  line-height: 1.6;
+  white-space: nowrap;
+}
+
 .map-legend {
   display: flex;
   flex-wrap: wrap;
