@@ -139,7 +139,8 @@ function fitToArea() {
 // 地図の右下に、ズームレベルのボタン(「Z=16.3」。整数なら小数を付けない)を出す。
 // ボタンを押すと、その左にズームレベルを変えるスライドバーを開く(もう一度押すか Esc で閉じる)。
 // 地図を拡大・縮小したとき(「＋」「−」ボタン・ホイール・ダブルクリックなど)も開き、こちらは
-// 操作が無いまま ZOOM_SLIDER_AUTO_CLOSE_SEC 秒たったら閉じる(ボタンで開いたときは、自動では閉じない)。
+// 操作が無いまま ZOOM_SLIDER_AUTO_CLOSE_SEC 秒たったら閉じる。ボタンで開いたときは自動では閉じないが、
+// その後にズームレベルを変えたら(拡大・縮小・スライドバー)、同じく秒数がたったら閉じる。
 // ボタンは右端の同じ位置のままにする(開け閉めでボタンが動かないように)。
 // スライドバーは MAP_MIN_ZOOM〜MAP_MAX_ZOOM を ZOOM_SNAP(0.1)刻みで動かし、地図の中心を保ったまま拡大・縮小する。
 function addZoomControl(L) {
@@ -187,8 +188,8 @@ function addZoomControl(L) {
       map.setZoom(target);
     };
 
-    // スライドバーをどう開いたか: null(閉じている)・'button'(ボタンで開いた。自動では閉じない)・
-    // 'zoom'(地図を拡大・縮小したので開いた。操作が無いまま ZOOM_SLIDER_AUTO_CLOSE_SEC 秒たったら閉じる)
+    // スライドバーをどう開いたか: null(閉じている)・'button'(ボタンで開き、まだズームレベルを変えていない。自動では閉じない)・
+    // 'zoom'(ズームレベルを変えた。操作が無いまま ZOOM_SLIDER_AUTO_CLOSE_SEC 秒たったら閉じる)
     let openedBy = null;
     let closeTimer = 0;
     let pointerInside = false; // マウスがボタン・スライドバーの上にある(タッチなら触れている)間は閉じない
@@ -214,8 +215,9 @@ function addZoomControl(L) {
     };
 
     // 地図のズームレベルが変わったら(スライドバー・＋−ボタン・ホイール・地図を合わせたとき)、表示を合わせる。
-    // 利用者が拡大・縮小したときは、スライドバーを開く(開いていれば、閉じるまでの秒数を数え直す)。
-    // 地点に地図を合わせたとき(読み込んだ・地図の大きさが変わった)と、スライドバーで変えたときは開かない
+    // 利用者が拡大・縮小したときは、スライドバーを開き、操作が無いまま ZOOM_SLIDER_AUTO_CLOSE_SEC 秒たったら閉じる
+    // (ボタンで開いていたときも同じ)。地点に地図を合わせたとき(読み込んだ・地図の大きさが変わった)は開かない。
+    // スライドバーで変えたときは、閉じるまでの秒数を数え直すだけにする(閉じた後に地図が追いついても開き直さない)
     map.on('zoomend', () => {
       const bySlider = zoomingBySlider;
       zoomingBySlider = false;
@@ -225,14 +227,14 @@ function addZoomControl(L) {
         slider.value = format(map.getZoom());
       }
       if (fitting) return;
-      if (openedBy !== null) restartCloseTimer();
-      else if (!bySlider) setOpen('zoom');
+      if (bySlider) restartCloseTimer();
+      else setOpen('zoom'); // ボタンで開いていたときも、拡大・縮小したら自動で閉じる開き方に変える
     });
     L.DomEvent.on(slider, 'input', () => {
       target = Number(slider.value);
       showZoom(target);
       follow();
-      restartCloseTimer();
+      setOpen('zoom'); // ボタンで開いていたときも、スライドバーで変えたら自動で閉じる開き方に変える
     });
 
     L.DomEvent.on(button, 'click', () => setOpen(openedBy === null ? 'button' : null));
