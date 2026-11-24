@@ -238,6 +238,12 @@ function countPoints(segments) {
   return segments.reduce((sum, s) => sum + s.points.length, 0).toLocaleString('ja-JP');
 }
 
+// 記録地点数。経路が2本以上なら経路数も付ける(1,234 点(3 経路))
+function formatPoints(segments) {
+  const routes = segments.length > 1 ? `(${segments.length} 経路)` : '';
+  return `${countPoints(segments)} 点${routes}`;
+}
+
 // 読み込んだ KMZ を画面から外す(ファイルは消えない)
 function onClearKmz() {
   if (state.busy || state.kmzFiles.length === 0) return;
@@ -270,8 +276,12 @@ function showKmzPreview({ fit = true } = {}) {
 
   state.photoRows = album ? labelPhotos(album, buildOutputPlan(album, Date.now())) : [];
   if (album) {
-    $('sumFile').replaceChildren(...album.files.map((f, i) => fileLine(fileLetter(i), f.fileName, PHOTO_COLOR)));
+    // KMZ ごとの写真の枚数(読み込み済みの写真と同じものを除いた、一覧に出している枚数)
+    $('sumFile').replaceChildren(...album.files.map((f, i) =>
+      fileLine(fileLetter(i), f.fileName, PHOTO_COLOR, [`${f.photos.length} 枚`])
+    ));
     $('sumCount').textContent = `${album.photos.length} 枚`;
+    $('sumCountItem').hidden = album.files.length < 2; // 1つならファイルの行と同じ数なので出さない
   }
   $('photoRows').replaceChildren(...state.photoRows.map(photoRow));
   showMap({ fit });
@@ -300,12 +310,16 @@ function showGpxPreview({ fit = true } = {}) {
   updatePreviewSection();
 
   if (track) {
-    const routes = track.segmentCount > 1 ? `(${track.segmentCount} 経路)` : '';
-    $('gpxFile').replaceChildren(
-      ...track.files.map((f, i) => fileLine(gpxLetter(i), f.source.fileName, trackColor(i)))
-    );
-    $('gpxPoints').textContent = `${track.pointCount.toLocaleString('ja-JP')} 点${routes}`;
+    // GPX ごとの記録地点数(経路数)・移動距離(読み込み済みの経路と同じものを除いた、内訳に出している経路の分)
+    $('gpxFile').replaceChildren(...track.files.map((f, i) => fileLine(gpxLetter(i), f.source.fileName, trackColor(i), [
+      formatPoints(f.segments),
+      formatDistance(f.segments.reduce((sum, s) => sum + s.distanceM, 0))
+    ])));
+    $('gpxPoints').textContent = formatPoints(track.files.flatMap((f) => f.segments));
     $('gpxDistance').textContent = formatDistance(track.distanceM);
+    const single = track.files.length < 2; // 1つならファイルの行と同じ数なので、合計は出さない
+    $('gpxPointsItem').hidden = single;
+    $('gpxDistanceItem').hidden = single;
   }
   // 経路ごとの内訳: GPX ごとに、ファイル名の行と、その経路(A-1, A-2 …)の行を並べる
   $('segRows').replaceChildren(...(track?.files ?? []).flatMap((f, i) => [
@@ -331,11 +345,20 @@ function fileLetter(index) {
 
 const gpxLetter = (index) => fileLetter(index).toUpperCase();
 
-// ファイル名の行(左に a, b … / A, B … の記号。記号の色は地図のマーカーの色)
-function fileLine(letter, name, color) {
+// ファイル名の行: 左に a, b … / A, B … の記号(色は地図のマーカーの色)とファイル名、
+// 右にファイルごとの数(stats: 写真の枚数、記録地点数・移動距離)。数は行どうしで列をそろえる(style.css の .file-list)
+function fileLine(letter, name, color, stats) {
   const div = document.createElement('div');
   div.className = 'file-line';
-  div.append(fileBadge(letter, color), name);
+  const nameEl = document.createElement('span');
+  nameEl.className = 'file-name';
+  nameEl.append(fileBadge(letter, color), name);
+  div.append(nameEl, ...stats.map((text) => {
+    const span = document.createElement('span');
+    span.className = 'file-stat';
+    span.textContent = text;
+    return span;
+  }));
   return div;
 }
 

@@ -444,9 +444,39 @@ body.is-resizing {
   overflow-wrap: anywhere;
 }
 
-/* ファイル名の行(左に KMZ の a, b … / GPX の A, B … の記号) */
-.file-line + .file-line {
-  margin-top: 2px;
+/* ファイルの一覧は、概要の幅いっぱいに使う(合計の欄はその下に並べる) */
+.summary .summary-files {
+  grid-column: 1 / -1;
+}
+
+/* ファイル名の行(左に KMZ の a, b … / GPX の A, B … の記号とファイル名、右にファイルごとの数)。
+   数は行どうしで列をそろえる: KMZ は写真の枚数の1列、GPX は記録地点数(経路数)・移動距離の2列。
+   数はいちばん長いファイル名のすぐ右に置く(列が広くても、名前と数が離れすぎないように)。
+   列が狭いときは、ファイル名の側を折り返す */
+.file-list {
+  display: grid;
+  grid-template-columns: minmax(0, max-content) auto;
+  justify-content: start;
+  gap: 2px 20px;
+}
+
+.file-list-gpx {
+  grid-template-columns: minmax(0, max-content) auto auto;
+}
+
+.file-line {
+  display: contents;
+}
+
+.file-name {
+  min-width: 0;
+}
+
+.file-stat {
+  font-weight: 400;
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 
 /* 記号の色は地図のマーカーの色(app.js で付ける) */
