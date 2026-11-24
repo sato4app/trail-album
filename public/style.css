@@ -825,6 +825,145 @@ body.is-resizing {
   color: var(--text);
 }
 
+/* 保存の設定(名前・元のファイル・保存先・保存される内容)。左に項目名、右に中身を並べる(狭い画面では縦に積む) */
+.save-form {
+  display: grid;
+  gap: 16px;
+}
+
+.save-field {
+  display: grid;
+  grid-template-columns: 8.5em minmax(0, 1fr);
+  gap: 4px 12px;
+  align-items: start;
+}
+
+.save-label {
+  padding-top: 7px; /* 右の入力欄・ボタンの文字の高さにそろえる */
+  font-weight: 600;
+}
+
+.save-field-body {
+  min-width: 0;
+}
+
+/* 名前の欄と「元に戻す」 */
+.save-name-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.text-input {
+  flex: 1;
+  min-width: 0;
+  max-width: 36em;
+  min-height: 38px;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+}
+
+.text-input:focus-visible {
+  border-color: var(--accent);
+  outline: 2px solid var(--accent);
+  outline-offset: 0;
+}
+
+.text-input[aria-invalid="true"] {
+  border-color: var(--error);
+}
+
+/* 名前の候補(押すと欄の名前をその候補にする)。今の名前と同じ候補は選んだ見た目にする */
+.name-candidates {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.name-candidates-label {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.btn-chip {
+  appearance: none;
+  min-height: 28px;
+  padding: 2px 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-sub);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.85rem;
+  text-align: left;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+
+.btn-chip:hover:not(:disabled) {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.btn-chip[aria-pressed="true"] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.btn-chip:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.btn-chip:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.field-help {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+/* 名前について知らせること(使えない文字を除く・長すぎる・空) */
+.field-note {
+  margin: 6px 0 0;
+  padding: 6px 10px;
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  background: var(--accent-soft);
+  font-size: 0.85rem;
+}
+
+.field-note[data-kind="error"] {
+  border-color: var(--error);
+  background: var(--error-bg);
+  color: var(--error);
+}
+
+/* 一緒に保存する元のファイル(KMZ・GPX) */
+.save-checks {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 24px;
+  padding-top: 7px;
+}
+
+.save-checks .field-help {
+  flex-basis: 100%;
+  margin: 0;
+}
+
 .check {
   display: inline-flex;
   align-items: center;
@@ -838,13 +977,33 @@ body.is-resizing {
   accent-color: var(--accent);
 }
 
+/* 読み込んでいない種類は押せない(薄く表示する) */
+.check:has(input:disabled) {
+  color: var(--muted);
+  cursor: not-allowed;
+}
+
+.check-count {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
 /* 「フォルダに保存」の保存先 */
 .save-dir {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 6px 10px;
-  margin-top: 12px;
+}
+
+@media (max-width: 560px) {
+  .save-field {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .save-label {
+    padding-top: 0;
+  }
 }
 
 .save-dir strong {
@@ -954,64 +1113,40 @@ body.is-busy {
   background: rgb(0 0 0 / 75%);
 }
 
-/* ===== 保存の確認 ===== */
-/* 余白は内側の .confirm-body に付ける(背景を押したかを e.target === dialog で見分けるため) */
-.confirm-dialog {
-  width: min(560px, calc(100vw - 32px));
-  max-height: calc(100vh - 32px);
-  padding: 0;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--surface);
-  color: var(--text);
-  box-shadow: 0 8px 32px rgb(0 0 0 / 25%);
-}
-
-.confirm-dialog::backdrop {
-  background: rgb(0 0 0 / 45%);
-}
-
-.confirm-body {
-  padding: 20px 20px 16px;
-}
-
-.confirm-title {
-  margin: 0 0 8px;
-  font-size: 1.15rem;
-}
-
-.confirm-lead {
-  margin: 0 0 12px;
-}
-
-/* 保存する内容の木(フォルダ・ファイルの入れ子) */
-.confirm-tree,
-.confirm-tree ul,
-.confirm-photos ul {
+/* ===== 保存される内容(フォルダ・ファイルの木) ===== */
+.save-tree,
+.save-tree ul,
+.save-photos ul {
   list-style: none;
   margin: 0;
   padding: 0;
 }
 
-.confirm-tree {
+.save-tree {
   padding: 10px 14px;
   border-radius: 8px;
   background: var(--surface-sub);
 }
 
-.confirm-tree ul {
+.save-tree ul {
   margin-left: 7px;
   padding-left: 14px;
   border-left: 1px solid var(--border);
 }
 
-.confirm-tree li {
+.save-tree li {
   padding: 3px 0;
 }
 
 .tree-name {
   font-weight: 600;
   overflow-wrap: anywhere;
+}
+
+/* 決まっていないもの(保存先が未指定・名前が空)は薄く表示する */
+.is-unset > .tree-name {
+  color: var(--muted);
+  font-weight: normal;
 }
 
 /* アイコン(フォルダ・ファイル)。色を変えられるよう SVG をマスクにして塗る */
@@ -1046,17 +1181,17 @@ body.is-busy {
 }
 
 /* 写真のファイル名の一覧(開いたときだけ表示) */
-.confirm-photos {
-  margin-top: 10px;
+.save-photos {
+  margin-top: 8px;
   font-size: 0.9rem;
 }
 
-.confirm-photos summary {
+.save-photos summary {
   color: var(--accent);
   cursor: pointer;
 }
 
-.confirm-photos ul {
+.save-photos ul {
   max-height: 30vh;
   overflow: auto;
   margin-top: 6px;
@@ -1064,16 +1199,4 @@ body.is-busy {
   border: 1px solid var(--border);
   border-radius: 8px;
   overflow-wrap: anywhere;
-}
-
-.confirm-note {
-  margin: 12px 0 0;
-}
-
-.confirm-actions {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 10px;
-  margin-top: 16px;
 }

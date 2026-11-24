@@ -1,8 +1,8 @@
 // フォルダ名・ファイル名の作成と、Windows で使えない文字の除去
 // 日時はすべて日本時間で扱う。端末のタイムゾーン設定に左右されないよう、
 // 9時間ずらした時刻を UTC として読み出す(getUTC〜)。
-// 名前の最大文字数は constants.js に置く。
-import { MAX_NAME_LENGTH, MAX_KMZ_NAME_LENGTH } from './constants.js';
+// 名前の最大文字数・写真のフォルダ名は constants.js に置く。
+import { MAX_NAME_LENGTH, MAX_SOURCE_NAME_LENGTH, PHOTOS_DIR } from './constants.js';
 
 export const JST_OFFSET_MS = 9 * 60 * 60 * 1000;
 
@@ -71,15 +71,31 @@ function formatJstCompact(ms) {
 //   % は文字コードの記号と解釈され、リンクから写真を開けなくなるため)
 // - 前後の空白を除き、maxLength 文字で切ったうえで、末尾のピリオド・空白を除く
 //   (Windows は末尾のピリオド・空白を黙って削るため、名前が食い違う)
+// eslint-disable-next-line no-control-regex
+const INVALID_NAME_CHARS = /[\\/:*?"<>|#%\u0000-\u001f\u007f]/g;
+
 export function sanitizeName(text, maxLength = MAX_NAME_LENGTH) {
   const cleaned = String(text ?? '')
     .replace(/[\r\n\t]+/g, ' ')
-    // eslint-disable-next-line no-control-regex
-    .replace(/[\\/:*?"<>|#%\u0000-\u001f\u007f]/g, '')
+    .replace(INVALID_NAME_CHARS, '')
     .trim();
   // サロゲートペア(絵文字など)を途中で切らないよう、文字単位で数える
   const cut = Array.from(cleaned).slice(0, maxLength).join('');
   return cut.replace(/[.\s]+$/u, '');
+}
+
+// 「名前」の欄に入力された文字を、保存に使う名前にする(sanitizeName と同じ規則)。
+// 入力欄の下で知らせるため、除いた文字(使えない文字。重なりは除く)と、長すぎて切ったかも返す。
+//   { name, removed: ['/', ':' …], truncated }
+export function checkSaveName(text) {
+  const spaced = String(text ?? '').replace(/[\r\n\t]+/g, ' ');
+  const removed = [...new Set(spaced.match(INVALID_NAME_CHARS) || [])];
+  const cleaned = spaced.replace(INVALID_NAME_CHARS, '').trim();
+  return {
+    name: sanitizeName(text, MAX_NAME_LENGTH),
+    removed,
+    truncated: Array.from(cleaned).length > MAX_NAME_LENGTH
+  };
 }
 
 // 画面と Excel に出す名称。空のときは「写真001」のように番号で補う
@@ -108,21 +124,65 @@ export function baseNameOf(fileName) {
   return String(fileName).replace(/\.[^./\\]*$/, '');
 }
 
-// 出力フォルダ名: yyyymmdd_<KML の Document 名>
-// Document 名が無ければ KMZ のファイル名(拡張子なし)を使う。
-// その名前が日付で始まるとき(20261029-ようらく台園地 など)は、日付が2回入らないよう名前だけにする。
-// 前に付ける日付は最も早い撮影日(日本時間)。撮影日時が1枚も無ければ nowMs の日付。
-export function buildFolderName(album, nowMs) {
-  const title = sanitizeName(album.title) || sanitizeName(baseNameOf(album.fileName)) || '写真';
-  if (startsWithDate(title)) return title;
-  const times = album.photos.map((p) => p.timeMs).filter(Number.isFinite);
-  const dateMs = times.length > 0 ? Math.min(...times) : nowMs;
-  return `${formatJstDate(dateMs)}_${title}`;
+// 写真の番号(保存の通し番号)・名称・保存するファイル名を付ける(画面の写真の一覧と保存で共通)。
+// album は merge.js の buildAlbum の結果(photos は保存の順)
+export function planPhotos(album) {
+  return album.photos.map((photo, i) => {
+    const no = i + 1;
+    return {
+      ...photo,
+      no,
+      displayName: displayNameOf(photo, no),
+      fileName: buildPhotoFileName(no, photo)
+    };
+  });
 }
 
-// 同じ名前が重なったら「名前 (2).kmz」のように番号を付ける(Windows に合わせて大文字・小文字は区別しない)
-function uniqueFileNames(names) {
-  const used = new Set();
+// ===== 保存の「名前」(出力フォルダ名・Excel・ZIP の名前) =====
+// album は merge.js の buildAlbum の結果、track は buildTrack の結果(どちらも読み込んでいなければ null)
+
+// 名前の既定値: yyyymmdd_<名前のもと>
+// 名前のもとは、KMZ があれば KML の Document 名(無ければ KMZ のファイル名)、GPX だけなら GPX のファイル名
+// (拡張子なし)。KMZ・GPX が複数なら、いちばん早いもの(album.files・track.files の先頭)を使う。
+// 名前のもとが日付で始まるとき(20261029-ようらく台園地 など)は、日付が2回入らないよう名前のもとだけにする。
+// 前に付ける日付は、最も早い撮影日(GPX だけなら最も早い記録日。日本時間)。日時が無ければ nowMs の日付。
+export function defaultSaveName(album, track, nowMs) {
+  let title;
+  let times;
+  if (album) {
+    title = sanitizeName(album.title) || sanitizeName(baseNameOf(album.fileName)) || '写真';
+    times = album.photos.map((p) => p.timeMs);
+  } else {
+    title = sanitizeName(baseNameOf(track.files[0].source.fileName)) || '移動経路';
+    times = track.files.flatMap((f) => f.segments.map((s) => s.startMs));
+  }
+  if (startsWithDate(title)) return title;
+  const known = times.filter(Number.isFinite);
+  const dateMs = known.length > 0 ? Math.min(...known) : nowMs;
+  return sanitizeName(`${formatJstDate(dateMs)}_${title}`);
+}
+
+// 名前の候補: 既定値、KML の Document 名、KMZ・GPX のファイル名(拡張子なし)。使えない文字を除き、重なりは1つにする
+export function saveNameCandidates(album, track, nowMs) {
+  const names = [defaultSaveName(album, track, nowMs)];
+  if (album) names.push(...album.titles, ...album.files.map((f) => baseNameOf(f.fileName)));
+  if (track) names.push(...track.files.map((f) => baseNameOf(f.source.fileName)));
+  return [...new Set(names.map((n) => sanitizeName(n)).filter(Boolean))];
+}
+
+// 一緒に保存する元のファイルの名前: 元のファイル名から使えない文字だけ除く。
+// 拡張子(ext)で終わらなければ付ける(中身で KMZ・GPX と分かったファイルも、その形式として開けるように)
+function sourceFileName(fileName, ext, fallback) {
+  const suffix = `.${ext}`;
+  const hasExt = fileName.toLowerCase().endsWith(suffix);
+  const base = sanitizeName(hasExt ? fileName.slice(0, -suffix.length) : fileName, MAX_SOURCE_NAME_LENGTH);
+  return `${base || fallback}${hasExt ? fileName.slice(-suffix.length) : suffix}`;
+}
+
+// 同じ名前が重なったら「名前 (2).kmz」のように番号を付ける(Windows に合わせて大文字・小文字は区別しない)。
+// reserved は、ほかに使っている名前(写真のフォルダ名など)
+function uniqueFileNames(names, reserved = []) {
+  const used = new Set(reserved.map((n) => n.toLowerCase()));
   return names.map((name) => {
     const base = baseNameOf(name);
     const ext = name.slice(base.length);
@@ -133,27 +193,25 @@ function uniqueFileNames(names) {
   });
 }
 
-// 出力の計画(フォルダ名・各写真の番号・名称・ファイル名・KMZ と Excel の保存名)を作る。
-// album は merge.js の buildAlbum の結果(photos は出力順、files は代表の KMZ が先頭)。
-// kmzFileNames は album.files と同じ順の、元の KMZ の保存名。
-export function buildOutputPlan(album, nowMs) {
-  // 元の KMZ はファイル名をそのまま使う(念のため使えない文字だけ除き、同じ名前が重なれば番号を付ける)
-  const kmzFileNames = uniqueFileNames(album.files.map((f) => sanitizeName(f.fileName, MAX_KMZ_NAME_LENGTH) || 'original.kmz'));
-  const photos = album.photos.map((photo, i) => {
-    const no = i + 1;
-    return {
-      ...photo,
-      no,
-      displayName: displayNameOf(photo, no),
-      fileName: buildPhotoFileName(no, photo)
-    };
-  });
+// 保存の計画: 出力フォルダ(名前 name)の中に置くものの名前を決める。
+//   { folderName, xlsxFileName, photos, kmz: [{ file, fileName }], gpx: [{ file, fileName }] }
+// - KMZ があれば、Excel(<名前>.xlsx)と写真(photos フォルダ)を必ず保存する。KMZ が無ければ、どちらも無し(null・[])
+// - includeKmz・includeGpx が true なら、読み込んだ KMZ・GPX(画面のファイルの一覧に出ているもの)を元のファイルのまま
+//   出力フォルダの直下に保存する。file は readKmz・readGpx の結果(kmzBytes・bytes を持つ)
+// - 直下のファイル名が重なれば番号を付ける(Excel の名前を優先して残す)
+export function buildSavePlan({ album, track, name, includeKmz, includeGpx }) {
+  const kmzFiles = album && includeKmz ? album.files : [];
+  const gpxFiles = track && includeGpx ? track.files.map((f) => f.source) : [];
+  const names = uniqueFileNames([
+    ...(album ? [`${name}.xlsx`] : []),
+    ...kmzFiles.map((f) => sourceFileName(f.fileName, 'kmz', 'original')),
+    ...gpxFiles.map((f) => sourceFileName(f.fileName, 'gpx', 'track'))
+  ], album ? [PHOTOS_DIR] : []);
   return {
-    folderName: buildFolderName(album, nowMs),
-    photos,
-    kmzFileNames,
-    // Excel は KMZ と同じ名前にする(20261029-ようらく台園地.kmz → 20261029-ようらく台園地.xlsx)。
-    // KMZ が複数のときは、いちばん早く撮った写真の KMZ(先頭)の名前にする
-    xlsxFileName: `${baseNameOf(kmzFileNames[0]) || '写真一覧'}.xlsx`
+    folderName: name,
+    xlsxFileName: album ? names.shift() : null,
+    photos: album ? planPhotos(album) : [],
+    kmz: kmzFiles.map((file) => ({ file, fileName: names.shift() })),
+    gpx: gpxFiles.map((file) => ({ file, fileName: names.shift() }))
   };
 }

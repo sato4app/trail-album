@@ -65,10 +65,11 @@ export const THUMB_JPEG_QUALITY = 0.85;
 export const APP_NAME = 'Trail Album';
 // 写真を入れるフォルダの名前(画面の説明文 index.html にも「photos」と書いている)
 export const PHOTOS_DIR = 'photos';
-// 写真のファイル名の名称部分・出力フォルダ名の最大文字数(長すぎるとパス全体が Windows の上限に近づくため)
+// 写真のファイル名の名称部分と、保存の「名前」(出力フォルダ名・Excel・ZIP の名前)の最大文字数
+// (長すぎるとパス全体が Windows の上限に近づくため)
 export const MAX_NAME_LENGTH = 40;
-// 一緒に保存する元の KMZ のファイル名の最大文字数
-export const MAX_KMZ_NAME_LENGTH = 120;
+// 一緒に保存する元の KMZ・GPX のファイル名の最大文字数(拡張子を除く)
+export const MAX_SOURCE_NAME_LENGTH = 120;
 
 // ===== Excel(excel-writer.js) =====
 

@@ -1,8 +1,9 @@
 // Trail Album のエントリポイント(画面の制御)
-// KMZ を読み込んでプレビューを表示し、写真の一覧の Excel(KMZ と同じ名前の .xlsx)と
-// 元の画質の写真を、フォルダへ直接保存するか、ZIP でダウンロードする。処理はすべてブラウザの中で行う。
+// KMZ・GPX を読み込んでプレビューを表示し、写真の一覧の Excel と元の画質の写真(KMZ があるとき)、
+// 読み込んだ KMZ・GPX ファイル(選んだとき)を、利用者が付けた名前のフォルダにまとめて、
+// フォルダへ直接保存するか、ZIP でダウンロードする。処理はすべてブラウザの中で行う。
 // KMZ・GPX はいくつでも読み込め、後から読み込んだものは今の内容に追加する(merge.js)。
-// GPX(移動経路)は、今は内容の表示だけで、保存する内容には含めない。
+// 保存される内容(フォルダ・ファイルの木)は、名前やチェックを変えるたびに画面の中で作り直す。
 import { readKmz, KmzError } from './kmz-reader.js';
 import { readGpx, GpxError } from './gpx-reader.js';
 import { excludeLoadedPhotos, buildAlbum, addSegments, buildTrack } from './merge.js';
@@ -10,9 +11,18 @@ import { createThumbnail } from './thumbnail.js';
 import { canCopyImage, copyImage, saveImage, flashButton } from './photo-actions.js';
 import { canShowMap, updateMap, trackColor } from './map-view.js';
 import { setupColSplitter } from './col-splitter.js';
-import { buildOutputPlan, formatJstDateTime, formatJstDateTimeSeconds, formatJstRange } from './naming.js';
+import {
+  planPhotos,
+  defaultSaveName,
+  saveNameCandidates,
+  checkSaveName,
+  buildSavePlan,
+  formatJstDateTime,
+  formatJstDateTimeSeconds,
+  formatJstRange
+} from './naming.js';
 import { buildWorkbookBlob } from './excel-writer.js';
-import { PHOTO_COLOR, PHOTOS_DIR } from './constants.js';
+import { PHOTO_COLOR, PHOTOS_DIR, MAX_NAME_LENGTH } from './constants.js';
 import {
   canSaveToFolder,
   loadSaveDir,
@@ -31,10 +41,16 @@ const state = {
   kmzFiles: [],    // 読み込んだ KMZ(readKmz の結果。読み込んだ順。写真は読み込み済みのものと重ならない分だけ)
   album: null,     // kmzFiles をまとめたもの(merge.js の buildAlbum の結果)。KMZ が無ければ null
   segments: [],    // 読み込んだ GPX の経路(merge.js の addSegments で重なりを除いたもの。読み込んだ順)
-  track: null,     // segments をまとめたもの(merge.js の buildTrack の結果。表示だけに使う)
+  track: null,     // segments をまとめたもの(merge.js の buildTrack の結果)。GPX が無ければ null
   photoRows: [],   // 写真の一覧に出している写真(保存の順。No. は保存の通し番号 no。地図にも使う)
   urls: [],        // プレビューで作った画像の URL(写真の一覧を作り直すときに解放する)
-  busy: false      // 読み込み中・保存中
+  busy: false,     // 読み込み中・保存中
+  save: {
+    defaultName: '',  // 名前の既定値(読み込んだ内容から作る: naming.js の defaultSaveName)
+    edited: false,    // 利用者が名前を既定値から変えたか(変えたら、KMZ・GPX を追加しても名前を書き換えない)
+    includeKmz: true, // 元の KMZ・GPX も一緒に保存するか(読み込んでいない間も、選んだ状態を覚えておく)
+    includeGpx: true
+  }
 };
 
 init();
@@ -71,6 +87,7 @@ function init() {
   $('btnPickSaveDir').addEventListener('click', onPickSaveDir);
   $('btnClearSaveDir').addEventListener('click', onClearSaveDir);
   $('btnSaveZip').addEventListener('click', onSaveZip);
+  setupSaveForm();
 
   const dialog = $('photoDialog');
   // 画像の外側(背景)を押したら閉じる
@@ -79,12 +96,6 @@ function init() {
   });
   dialog.addEventListener('close', () => {
     $('dialogImage').removeAttribute('src');
-  });
-
-  // 保存の確認: 背景を押したらキャンセルとして閉じる
-  const confirmDialog = $('confirmDialog');
-  confirmDialog.addEventListener('click', (e) => {
-    if (e.target === confirmDialog) confirmDialog.close('cancel');
   });
 
   // 保存の途中でページを閉じようとしたら確認する
@@ -130,8 +141,7 @@ function setupDragAndDrop() {
 // 選んだ(置いた)ファイルを、KMZ・GPX ともすべて読み込み、今の内容に追加する。
 // 同じ写真・経路は重ねて追加しない(merge.js)。読み込めなかったファイルがあっても、他のファイルは読み込む。
 async function loadFiles(files) {
-  // 保存の確認を出している間は読み込まない(確認した内容と違うものを保存しないように)
-  if (files.length === 0 || state.busy || $('confirmDialog').open) return;
+  if (files.length === 0 || state.busy) return;
   setBusy(true);
   const results = []; // 読み込みの結果(1ファイル1行)
   const progress = (message) => showStatus([...results, { message }]);
@@ -271,12 +281,10 @@ function showKmzPreview({ fit = true } = {}) {
   $('kmzEmpty').hidden = !!album;
   $('kmzPreview').hidden = !album;
   $('btnClearKmz').hidden = !album;
-  $('outputSection').hidden = !album; // 保存するのは KMZ の内容なので、KMZ を読み込んでいるときだけ出す
-  showResult('');
   updatePreviewSection();
 
   // 写真は保存の順(すべての KMZ を通した撮影日時の順)に並べ、No. は保存するファイル名・Excel と同じ通し番号にする
-  state.photoRows = album ? buildOutputPlan(album, Date.now()).photos : [];
+  state.photoRows = album ? planPhotos(album) : [];
   if (album) {
     // KMZ ごとの写真の枚数(読み込み済みの写真と同じものを除いた、一覧に出している枚数)
     $('sumFile').replaceChildren(...album.files.map((f, i) =>
@@ -287,6 +295,7 @@ function showKmzPreview({ fit = true } = {}) {
   }
   $('photoRows').replaceChildren(...state.photoRows.map(photoRow));
   showMap({ fit });
+  refreshSaveSection();
 }
 
 // 右側(GPX)の表示を、読み込んだ経路(state.segments)から作り直す。fit は showMap と同じ
@@ -317,6 +326,7 @@ function showGpxPreview({ fit = true } = {}) {
     ...f.segments.map((segment, j) => segmentRow(segment, segmentNo(i, j)))
   ]));
   showMap({ fit });
+  refreshSaveSection();
 }
 
 // KMZ・GPX のどちらかを読み込んでいるときだけ「内容を確かめる」を出す
@@ -547,13 +557,189 @@ function openPhoto(photo) {
 }
 
 // ===== 保存 =====
+// 保存の設定(名前・一緒に保存する元のファイル・保存先)と、保存される内容(フォルダ・ファイルの木)。
+// 名前やチェックを変えるたびに、保存される内容を作り直す(renderSavePreview)。
+// 保存ボタンを押したときは、画面に出している内容と同じ規則(naming.js の buildSavePlan)で保存する。
+
+function setupSaveForm() {
+  $('saveName').addEventListener('input', () => {
+    state.save.edited = $('saveName').value !== state.save.defaultName;
+    renderSavePreview();
+  });
+  $('btnResetName').addEventListener('click', () => setSaveName(state.save.defaultName));
+  // 候補を押したら、欄の名前をその候補にする(そこから続けて直せる)
+  $('nameCandidates').addEventListener('click', (e) => {
+    const button = e.target.closest('button[data-name]');
+    if (button && !button.disabled) setSaveName(button.dataset.name);
+  });
+  for (const key of ['includeKmz', 'includeGpx']) {
+    $(key).addEventListener('change', () => {
+      state.save[key] = $(key).checked;
+      renderSavePreview();
+    });
+  }
+}
+
+function setSaveName(name) {
+  $('saveName').value = name;
+  state.save.edited = name !== state.save.defaultName;
+  renderSavePreview();
+}
+
+// 読み込んだ内容が変わったら(読み込み・クリア)、名前の既定値と候補、写真のファイル名の一覧を作り直す。
+// 利用者が名前を変えていなければ、名前も既定値に合わせる(変えていれば、そのまま残す)。
+// KMZ・GPX をすべてクリアしたら「保存する」を隠し、名前を変えたことも忘れる
+function refreshSaveSection() {
+  const { album, track } = state;
+  const hasData = !!album || !!track;
+  $('outputSection').hidden = !hasData;
+  showResult('');
+  if (!hasData) {
+    state.save.edited = false;
+    return;
+  }
+
+  const nowMs = Date.now();
+  state.save.defaultName = defaultSaveName(album, track, nowMs);
+  if (!state.save.edited) $('saveName').value = state.save.defaultName;
+  const label = document.createElement('span');
+  label.className = 'name-candidates-label';
+  label.textContent = '候補:';
+  $('nameCandidates').replaceChildren(label, ...saveNameCandidates(album, track, nowMs).map((name) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'btn-chip';
+    button.dataset.name = name;
+    button.textContent = name;
+    button.title = `名前を「${name}」にします`;
+    return button;
+  }));
+
+  // 写真のファイル名の一覧(名前を変えても変わらないので、読み込んだ内容が変わったときだけ作る)
+  const photos = state.photoRows;
+  $('savePhotos').hidden = photos.length === 0;
+  $('savePhotosSummary').textContent = `写真のファイル名を見る(${photos.length} 枚)`;
+  $('savePhotoList').replaceChildren(...photos.map((p) => {
+    const li = document.createElement('li');
+    li.textContent = p.fileName;
+    return li;
+  }));
+  renderSavePreview();
+}
+
+// 名前・チェック・保存先から、保存される内容(木)を作り直し、保存ボタンを押せるかを決める
+function renderSavePreview() {
+  const { album, track, busy } = state;
+  if (!album && !track) return;
+  const input = $('saveName');
+  const check = checkSaveName(input.value);
+
+  // 名前について知らせること(使えない文字は除き、長すぎれば切る。どちらも保存される内容の木に反映する)
+  const notes = [];
+  if (check.removed.length > 0) {
+    const chars = [...new Set(check.removed.map((c) => (/[\u0000-\u001f\u007f]/.test(c) ? '制御文字' : `「${c}」`)))];
+    notes.push(`${chars.join('')}は名前に使えないため除きます。`);
+  }
+  if (check.truncated) notes.push(`名前は ${MAX_NAME_LENGTH} 文字までにします(それより後は除きます)。`);
+  if (!check.name) notes.push('名前を入力してください。');
+  const note = $('saveNameNote');
+  note.textContent = notes.join('');
+  note.hidden = notes.length === 0;
+  note.dataset.kind = check.name ? 'guide' : 'error';
+  input.setAttribute('aria-invalid', String(!check.name));
+  input.disabled = busy;
+  $('btnResetName').disabled = busy || input.value === state.save.defaultName;
+  for (const button of $('nameCandidates').querySelectorAll('button')) {
+    button.disabled = busy;
+    button.setAttribute('aria-pressed', String(button.dataset.name === input.value));
+  }
+
+  // 一緒に保存する元のファイル(読み込んでいない種類は押せなくし、チェックも外して見せる)
+  setIncludeCheck('includeKmz', album ? album.files.length : 0, state.save.includeKmz, busy);
+  setIncludeCheck('includeGpx', track ? track.files.length : 0, state.save.includeGpx, busy);
+
+  // 保存される内容。名前が空のときは「（名前未入力）」と薄く出す(保存ボタンは押せない)
+  const plan = buildSavePlan({
+    album,
+    track,
+    name: check.name || '（名前未入力）',
+    includeKmz: state.save.includeKmz,
+    includeGpx: state.save.includeGpx
+  });
+  const noName = !check.name;
+  const contents = [];
+  if (plan.xlsxFileName) contents.push(treeItem(plan.xlsxFileName, '写真の一覧(Excel)', 'file', [], noName));
+  if (album) contents.push(treeItem(PHOTOS_DIR, `写真 ${plan.photos.length} 枚(元の画質のまま)`, 'folder'));
+  contents.push(...plan.kmz.map((k) => treeItem(k.fileName, '読み込んだ KMZ', 'file')));
+  contents.push(...plan.gpx.map((g) => treeItem(g.fileName, '読み込んだ GPX', 'file')));
+  const zipName = `${plan.folderName}.zip`;
+  if (canSaveToFolder) {
+    const dir = currentSaveDir();
+    $('saveTree').replaceChildren(treeItem(dir ? dir.name : '（保存先が未指定）', '保存先', 'folder', [
+      treeItem(plan.folderName, '新しく作るフォルダ', 'folder', contents, noName)
+    ], !dir));
+    $('saveTreeNote').textContent =
+      '「フォルダに保存」では、同じ名前のフォルダが既にあるときは上書きせず、「名前 (2)」のように番号を付けて作ります。' +
+      `「ZIP でダウンロード」では、このフォルダの中身を「${zipName}」にまとめてダウンロードします。`;
+  } else {
+    $('saveTree').replaceChildren(treeItem('ダウンロード', 'ダウンロード先', 'folder', [
+      treeItem(zipName, 'ZIP ファイル', 'zip', contents, noName)
+    ]));
+    $('saveTreeNote').textContent = '同じ名前のファイルが既にあるときは、ブラウザが番号を付けた名前にします。';
+  }
+
+  // 保存ボタンを押せないときは、理由をボタンの下に出す
+  const reason = noName
+    ? '名前を入力すると保存できます。'
+    : contents.length === 0
+      ? '保存するファイルがありません。「元のファイル」の GPX にチェックを入れてください。'
+      : '';
+  $('saveBlocked').textContent = reason;
+  $('saveBlocked').hidden = !reason;
+  $('btnSaveFolder').disabled = busy || !!reason;
+  $('btnSaveZip').disabled = busy || !!reason;
+}
+
+// 「元のファイル」のチェック。count はその種類の読み込んだファイルの数(0 なら押せなくし、チェックを外して見せる)
+function setIncludeCheck(id, count, wanted, busy) {
+  const box = $(id);
+  box.checked = count > 0 && wanted;
+  box.disabled = busy || count === 0;
+  $(`${id}Count`).textContent = count > 0 ? `(${count} ファイル)` : '(読み込んでいません)';
+}
+
+// 木の1項目(名前・説明・中身)。kind は 'folder' | 'zip' | 'file'(アイコンの違い: style.css)。
+// unset が true なら、まだ決まっていないもの(保存先が未指定・名前が空)として薄く出す
+function treeItem(name, note, kind, children = [], unset = false) {
+  const li = document.createElement('li');
+  li.className = `is-${kind}`;
+  if (unset) li.classList.add('is-unset');
+  const nameEl = document.createElement('span');
+  nameEl.className = 'tree-name';
+  nameEl.textContent = name;
+  li.append(nameEl);
+  if (note) {
+    const noteEl = document.createElement('span');
+    noteEl.className = 'tree-note';
+    noteEl.textContent = note;
+    li.append(noteEl);
+  }
+  if (children.length > 0) {
+    const ul = document.createElement('ul');
+    ul.append(...children);
+    li.append(ul);
+  }
+  return li;
+}
+
 // 保存先の表示(ブラウザからはフォルダの名前だけが分かり、場所(パス)は分からない)。
-// 未指定なら「（フォルダ未指定）」を薄く表示し、「クリア」を押せないようにする
+// 未指定なら「（フォルダ未指定）」を薄く表示し、「クリア」を押せないようにする。保存される内容の木の先頭も合わせる
 function updateSaveDirLabel() {
   const dir = currentSaveDir();
   $('saveDirName').textContent = dir ? dir.name : '（フォルダ未指定）';
   $('saveDirName').classList.toggle('is-unset', !dir);
   $('btnClearSaveDir').disabled = state.busy || !dir;
+  renderSavePreview();
 }
 
 async function onPickSaveDir() {
@@ -578,28 +764,17 @@ async function onClearSaveDir() {
 }
 
 async function onSaveFolder() {
-  if (!state.album || state.busy) return;
+  if (state.busy) return;
+  const output = prepareOutput();
+  if (!output) return;
   showResult('');
   // 保存先が未指定なら、失敗ではなく次の操作の案内として伝える
-  const dir = currentSaveDir();
-  if (!dir) {
+  if (!currentSaveDir()) {
     showResult('保存先が指定されていません。「保存先を指定」で、保存先のフォルダを指定してください。', 'guide');
     return;
   }
 
-  const output = prepareOutput();
-  const confirmed = await confirmSave({
-    title: 'フォルダに保存します',
-    lead: `保存先「${dir.name}」の中に、次のフォルダを作って保存します。`,
-    parent: { name: dir.name, note: '保存先' },
-    container: { name: output.plan.folderName, note: '新しく作るフォルダ', kind: 'folder' },
-    output,
-    note: '同じ名前のフォルダが既にあるときは、上書きせず「名前 (2)」のように番号を付けて作ります。',
-    okLabel: '保存する'
-  });
-  if (!confirmed) return;
-
-  // 書き込みの権限の確認は、「保存する」を押した直後に出す(Excel の作成より先に)
+  // 書き込みの権限の確認は、押した直後に出す(Excel の作成より先に。間に時間のかかる処理を挟むと止められる)
   let parent;
   try {
     parent = await prepareSaveDir();
@@ -611,137 +786,68 @@ async function onSaveFolder() {
     updateSaveDirLabel();
   }
 
-  await runOutput(output, async (plan, entries, onPhotoDone) => {
-    const name = await saveToFolder(parent, plan.folderName, entries, (path) => {
-      if (path.startsWith(`${PHOTOS_DIR}/`)) onPhotoDone();
-    });
-    const renamed = name !== plan.folderName ? '同じ名前のフォルダが既にあったため、番号を付けた名前にしました。' : '';
+  const { folderName } = output.plan;
+  await runOutput(output, async (entries, onFileDone) => {
+    const name = await saveToFolder(parent, folderName, entries, onFileDone);
+    const renamed = name !== folderName ? '同じ名前のフォルダが既にあったため、番号を付けた名前にしました。' : '';
     return `「${parent.name}」の中に「${name}」フォルダを作り、保存しました。${renamed}`;
-  }, '写真を保存中…');
+  }, 'ファイルを保存中…');
 }
 
 async function onSaveZip() {
-  if (!state.album || state.busy) return;
-  showResult('');
+  if (state.busy) return;
   const output = prepareOutput();
-  const zipName = `${output.plan.folderName}.zip`;
-  const confirmed = await confirmSave({
-    title: 'ZIP でダウンロードします',
-    lead: '次の ZIP ファイルを「ダウンロード」フォルダにダウンロードします' +
-      '(ブラウザの設定でダウンロード先を変えている場合は、その場所になります)。',
-    parent: { name: 'ダウンロード', note: 'ダウンロード先' },
-    container: { name: zipName, note: 'ZIP ファイル', kind: 'zip' },
-    output,
-    note: '同じ名前のファイルが既にあるときは、ブラウザが番号を付けた名前にします。' +
-      'ZIP は展開してから Excel ファイルを開いてください。',
-    okLabel: 'ダウンロードする'
-  });
-  if (!confirmed) return;
-
-  await runOutput(output, async (plan, entries, onPhotoDone) => {
-    const blob = await buildZipBlob(entries, (path) => {
-      if (path.startsWith(`${PHOTOS_DIR}/`)) onPhotoDone();
-    });
+  if (!output) return;
+  showResult('');
+  const { folderName, xlsxFileName } = output.plan;
+  const zipName = `${folderName}.zip`;
+  await runOutput(output, async (entries, onFileDone) => {
+    const blob = await buildZipBlob(entries, onFileDone);
     downloadBlob(blob, zipName);
-    return `「${zipName}」をダウンロードしました。ZIP を展開してから「${plan.xlsxFileName}」を開いてください` +
-      '(展開せずに開くと、Excel のリンクから写真を開けません)。';
+    const howToOpen = xlsxFileName
+      ? `ZIP を展開してから「${xlsxFileName}」を開いてください(展開せずに開くと、Excel のリンクから写真を開けません)。`
+      : '';
+    return `「${zipName}」をダウンロードしました。${howToOpen}`;
   }, 'ZIP を作成中…');
 }
 
-// 保存する内容を決める。確認の画面に出した名前のとおりに保存するよう、ここで決めたものを最後まで使う
+// 保存する内容を、押した時点の名前・チェックで決める(画面の「保存される内容」と同じ規則)。
+// 名前が空・保存するファイルが無いときは null(保存ボタンは押せなくしてあるが、念のため確かめる)
 function prepareOutput() {
-  const nowMs = Date.now();
-  return {
+  const name = checkSaveName($('saveName').value).name;
+  if (!name) return null;
+  const plan = buildSavePlan({
     album: state.album,
-    nowMs,
-    plan: buildOutputPlan(state.album, nowMs),
-    includeKmz: $('includeKmz').checked
-  };
-}
-
-// ===== 保存の確認 =====
-// どこに何が保存されるかを、フォルダ・ファイルの木で見せて確かめる。
-// 「保存する」(okLabel)なら true、キャンセル・Esc・背景を押したときは false を返す。
-//   parent:    保存先 { name, note }
-//   container: 保存先の中に作るもの { name, note, kind: 'folder' | 'zip' }
-//   output:    prepareOutput の結果(中身のファイル名に使う)
-function confirmSave({ title, lead, parent, container, output, note, okLabel }) {
-  const { plan, includeKmz } = output;
-  const contents = [
-    treeItem(plan.xlsxFileName, '写真の一覧(Excel)', 'file'),
-    treeItem(PHOTOS_DIR, `写真 ${plan.photos.length} 枚(元の画質のまま)`, 'folder')
-  ];
-  if (includeKmz) contents.push(...plan.kmzFileNames.map((name) => treeItem(name, '読み込んだ KMZ', 'file')));
-  const tree = treeItem(parent.name, parent.note, 'folder', [
-    treeItem(container.name, container.note, container.kind, contents)
-  ]);
-
-  $('confirmTitle').textContent = title;
-  $('confirmLead').textContent = lead;
-  $('confirmTree').replaceChildren(tree);
-  $('confirmPhotosSummary').textContent = `写真のファイル名を見る(${plan.photos.length} 枚)`;
-  $('confirmPhotoList').replaceChildren(...plan.photos.map((p) => {
-    const li = document.createElement('li');
-    li.textContent = p.fileName;
-    return li;
-  }));
-  $('confirmPhotos').open = false;
-  $('confirmNote').textContent = note;
-  $('confirmOk').textContent = okLabel;
-
-  const dialog = $('confirmDialog');
-  dialog.returnValue = '';
-  dialog.showModal();
-  return new Promise((resolve) => {
-    dialog.addEventListener('close', () => resolve(dialog.returnValue === 'ok'), { once: true });
+    track: state.track,
+    name,
+    includeKmz: state.save.includeKmz,
+    includeGpx: state.save.includeGpx
   });
+  if (!plan.xlsxFileName && plan.kmz.length === 0 && plan.gpx.length === 0) return null;
+  return { album: state.album, nowMs: Date.now(), plan };
 }
 
-// 木の1項目(名前・説明・中身)。kind は 'folder' | 'zip' | 'file'(アイコンの違い: style.css)
-function treeItem(name, note, kind, children = []) {
-  const li = document.createElement('li');
-  li.className = `is-${kind}`;
-  const nameEl = document.createElement('span');
-  nameEl.className = 'tree-name';
-  nameEl.textContent = name;
-  li.append(nameEl);
-  if (note) {
-    const noteEl = document.createElement('span');
-    noteEl.className = 'tree-note';
-    noteEl.textContent = note;
-    li.append(noteEl);
-  }
-  if (children.length > 0) {
-    const ul = document.createElement('ul');
-    ul.append(...children);
-    li.append(ul);
-  }
-  return li;
-}
-
-// 保存の共通処理: Excel を作り、保存する内容(entries)をそろえて save に渡す。
-// output は prepareOutput の結果。save(plan, entries, onPhotoDone) は完了メッセージを返す。
-async function runOutput(output, save, photoLabel) {
+// 保存の共通処理: Excel を作り(KMZ があるとき)、保存する内容(entries)をそろえて save に渡す。
+// save(entries, onFileDone) は完了メッセージを返す。進み具合は、保存したファイルの数で出す
+async function runOutput(output, save, label) {
   setBusy(true);
-  const { album, nowMs, plan, includeKmz } = output;
-  const total = plan.photos.length;
-  let done = 0;
+  const { album, nowMs, plan } = output;
   try {
-    showProgress('Excel を作成中…');
-    const xlsx = await buildWorkbookBlob(album, plan, nowMs);
-
-    const entries = [
-      { path: plan.xlsxFileName, data: xlsx },
-      ...plan.photos.map((p) => ({ path: `${PHOTOS_DIR}/${p.fileName}`, data: p.bytes }))
-    ];
-    if (includeKmz) {
-      album.files.forEach((file, i) => entries.push({ path: plan.kmzFileNames[i], data: file.kmzBytes }));
+    const entries = [];
+    if (album) {
+      showProgress('Excel を作成中…');
+      entries.push({ path: plan.xlsxFileName, data: await buildWorkbookBlob(album, plan, nowMs) });
+      entries.push(...plan.photos.map((p) => ({ path: `${PHOTOS_DIR}/${p.fileName}`, data: p.bytes })));
     }
+    entries.push(...plan.kmz.map((k) => ({ path: k.fileName, data: k.file.kmzBytes })));
+    entries.push(...plan.gpx.map((g) => ({ path: g.fileName, data: g.file.bytes })));
 
-    showProgress(photoLabel, 0, total);
-    const message = await save(plan, entries, () => {
+    const total = entries.length;
+    let done = 0;
+    showProgress(label, 0, total);
+    const message = await save(entries, () => {
       done++;
-      showProgress(photoLabel, done, total);
+      showProgress(label, done, total);
     });
     showResult(message, 'ok');
   } catch (err) {
@@ -759,10 +865,11 @@ async function runOutput(output, save, photoLabel) {
 // ===== 表示の切り替え =====
 function setBusy(busy) {
   state.busy = busy;
-  for (const id of ['btnPickFile', 'btnClearKmz', 'btnClearGpx', 'btnSaveFolder', 'btnPickSaveDir', 'btnSaveZip', 'includeKmz']) {
+  for (const id of ['btnPickFile', 'btnClearKmz', 'btnClearGpx', 'btnPickSaveDir']) {
     $(id).disabled = busy;
   }
-  updateSaveDirLabel(); // 「クリア」は保存先が未指定のときも押せないので別に扱う
+  // 保存先の「クリア」と、保存の設定・保存ボタンは、ほかの条件でも押せなくするので別に扱う
+  updateSaveDirLabel();
   $('dropZone').classList.toggle('is-disabled', busy);
   document.body.classList.toggle('is-busy', busy);
 }

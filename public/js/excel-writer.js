@@ -1,5 +1,5 @@
 // Excel ファイル(.xlsx)の作成(ExcelJS を CDN から読み込んで使う)
-// ファイル名は KMZ と同じ名前にする(naming.js の buildOutputPlan の xlsxFileName)。
+// ファイル名は保存の「名前」(出力フォルダと同じ名前)にする(naming.js の buildSavePlan の xlsxFileName)。
 // シート「写真一覧」に写真1枚を1行で並べ、シート「情報」に元の KMZ の情報を書く。
 // アプリ名・写真のフォルダ名・フォント・縮小版の表示枠などの設定値は constants.js に置く。
 import { JST_OFFSET_MS } from './naming.js';
@@ -91,7 +91,7 @@ export function photoLinkTarget(fileName) {
 }
 
 // Excel ファイルを作り、Blob で返す。
-// plan は naming.js の buildOutputPlan の結果(各写真に thumb: { bytes, width, height } | null を持つ)。
+// plan は naming.js の buildSavePlan の結果(各写真に thumb: { bytes, width, height } | null を持つ)。
 export async function buildWorkbookBlob(album, plan, nowMs) {
   const ExcelJS = globalThis.ExcelJS;
   const wb = new ExcelJS.Workbook();

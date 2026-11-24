@@ -28,11 +28,14 @@ function distanceBetween(a, b) {
 }
 
 // GPX ファイル(File)を読み込み、移動経路の情報を返す。
-//   { fileName, segments: [{ points: [{ lat, lng, timeMs }], distanceM, startMs, endMs }] }
+//   { fileName, bytes, segments: [{ points: [{ lat, lng, timeMs }], distanceM, startMs, endMs }] }
 // segments は GPX の順。startMs・endMs は記録時刻の最初と最後(記録時刻が1つも無ければ null)。
+// bytes は GPX そのもののバイト列(「保存する」で元のファイルのまま保存する。読み込んだ後に元のファイルを
+// 移動・削除しても保存できるよう持っておく)。
 // 複数の GPX をまとめた合計(記録地点数・移動距離など)は merge.js の buildTrack で求める。
 export async function readGpx(file) {
-  const doc = parseXml(await file.text());
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  const doc = parseXml(new TextDecoder('utf-8').decode(bytes));
   if (!doc || doc.documentElement.localName !== 'gpx') {
     throw new GpxError('GPX として読み込めませんでした。ファイルが壊れているか、GPX ではない可能性があります。');
   }
@@ -50,6 +53,7 @@ export async function readGpx(file) {
 
   return {
     fileName: file.name,
+    bytes,
     segments: pointLists.map(summarize)
   };
 }
