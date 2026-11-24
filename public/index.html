@@ -34,14 +34,17 @@
   </header>
 
   <main class="inner">
-    <!-- 1. KMZ・GPX の選択(KMZ と GPX を一緒に選んでもよい) -->
+    <!-- 1. KMZ・GPX の選択(いくつでも一緒に選べる。後から選んだファイルは今の内容に追加する) -->
     <section class="card" aria-labelledby="selectTitle">
       <h2 id="selectTitle"><span class="step">1</span>KMZ, GPX ファイルを選ぶ</h2>
       <div class="drop-zone" id="dropZone">
         <p class="drop-lead">ここに KMZ, GPX ファイルをドラッグ＆ドロップ</p>
         <p class="drop-or">または</p>
         <button type="button" class="btn btn-primary" id="btnPickFile">KMZ, GPX ファイルを選ぶ</button>
-        <p class="drop-note">KMZ(写真)と GPX(移動経路)は、2つ一緒に選ぶこともできます。</p>
+        <p class="drop-note">
+          KMZ(写真)・GPX(移動経路)は、いくつでも一緒に選べます。<br>
+          後から選んだファイルは、今の内容に追加します(同じ写真・経路は重ねて追加しません)。
+        </p>
         <input type="file" id="fileInput" accept=".kmz,.gpx" multiple hidden>
       </div>
       <!-- 読み込みの結果(1ファイル1行: app.js の showStatus) -->
@@ -54,7 +57,11 @@
       <div class="preview-cols">
         <!-- KMZ(写真) -->
         <section class="preview-col" aria-labelledby="kmzColTitle">
-          <h3 class="col-title" id="kmzColTitle"><span class="kind-tag">KMZ</span>写真</h3>
+          <div class="col-head">
+            <h3 class="col-title" id="kmzColTitle"><span class="kind-tag">KMZ</span>写真</h3>
+            <button type="button" class="btn btn-small" id="btnClearKmz" hidden
+              title="読み込んだ KMZ を、この画面から外します（ファイルは消えません）">クリア</button>
+          </div>
           <p class="preview-empty" id="kmzEmpty">KMZ ファイルは読み込んでいません。</p>
           <div id="kmzPreview" hidden>
             <dl class="summary">
@@ -81,7 +88,11 @@
 
         <!-- GPX(移動経路) -->
         <section class="preview-col" aria-labelledby="gpxColTitle">
-          <h3 class="col-title" id="gpxColTitle"><span class="kind-tag">GPX</span>移動経路</h3>
+          <div class="col-head">
+            <h3 class="col-title" id="gpxColTitle"><span class="kind-tag">GPX</span>移動経路</h3>
+            <button type="button" class="btn btn-small" id="btnClearGpx" hidden
+              title="読み込んだ GPX を、この画面から外します（ファイルは消えません）">クリア</button>
+          </div>
           <p class="preview-empty" id="gpxEmpty">GPX ファイルは読み込んでいません。</p>
           <div id="gpxPreview" hidden>
             <dl class="summary">
@@ -101,7 +112,7 @@
                   <thead>
                     <tr>
                       <th class="col-no" scope="col">No.</th>
-                      <th class="col-time" scope="col">記録の日時</th>
+                      <th class="col-time" scope="col">記録の日時 / GPX ファイル</th>
                       <th class="col-num" scope="col">地点数</th>
                       <th class="col-num" scope="col">移動距離</th>
                     </tr>
@@ -120,6 +131,7 @@
       <h2 id="outputTitle"><span class="step">3</span>保存する</h2>
       <p class="hint">
         写真の一覧の Excel ファイル(KMZ と同じ名前の .xlsx)と、元の画質の写真を入れた「photos」フォルダを、上の出力フォルダ名でまとめて保存します。
+        KMZ が複数のときは、いちばん早く撮った写真の KMZ の名前を使います。
       </p>
       <!-- 保存方法の使い分け(フォルダに保存できないブラウザでは、その項目を隠す: app.js) -->
       <ul class="save-guide">

@@ -322,11 +322,20 @@ main {
   }
 }
 
+/* 列の見出しと「クリア」 */
+.col-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0 0 12px;
+}
+
 .col-title {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin: 0 0 12px;
+  margin: 0;
   font-size: 1rem;
 }
 
@@ -372,6 +381,7 @@ main {
   margin: 0;
   font-weight: 600;
   overflow-wrap: anywhere;
+  white-space: pre-line; /* ファイルが複数のときは、ファイル名などを1つ1行で出す */
 }
 
 /* 表が収まらないときは、表の中だけを横に動かせるようにする */
@@ -435,6 +445,13 @@ main {
 /* 記録時刻が無い経路 */
 .seg-table .is-empty {
   color: var(--muted);
+}
+
+/* どの GPX の経路か */
+.seg-table .seg-file {
+  color: var(--muted);
+  font-size: 0.8rem;
+  overflow-wrap: anywhere;
 }
 
 /* 写真の一覧(KMZ): 1列目に No.・名称・撮影日時・緯度, 経度を1行ずつ、2列目に写真 */

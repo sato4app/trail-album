@@ -54,9 +54,9 @@ function resolvePath(baseDir, src) {
   return parts.join('/');
 }
 
-// KMZ ファイル(File)を読み込み、アルバム情報を返す。
-//   { fileName, kmzBytes, title, photos: [{ name, timeMs, lat, lng, bytes, ext, type, srcPath }] }
-// photos は出力順(撮影日時の昇順。撮影日時の無い写真は KML の順で末尾)に並べる。
+// KMZ ファイル(File)を読み込み、KMZ の情報を返す。
+//   { fileName, kmzBytes, title, photos: [{ name, timeMs, lat, lng, bytes, ext, type, srcPath, kmlIndex }] }
+// photos は KML の順(出力順への並べ替えは、複数の KMZ をまとめるときに merge.js の buildAlbum で行う)。
 // kmzBytes は KMZ そのもののバイト列(読み込んだ後に元のファイルを移動・削除しても保存できるよう持っておく)。
 export async function readKmz(file) {
   const JSZip = globalThis.JSZip;
@@ -141,7 +141,7 @@ export async function readKmz(file) {
     fileName: file.name,
     kmzBytes,
     title: documentTitle(doc),
-    photos: sortPhotos(photos)
+    photos
   };
 }
 
@@ -153,16 +153,4 @@ function documentTitle(doc) {
     if (name) return name;
   }
   return '';
-}
-
-// 撮影日時の昇順。撮影日時の無い写真は KML の順で末尾に置く
-function sortPhotos(photos) {
-  return [...photos].sort((a, b) => {
-    const ta = a.timeMs;
-    const tb = b.timeMs;
-    if (ta !== null && tb !== null && ta !== tb) return ta - tb;
-    if (ta === null && tb !== null) return 1;
-    if (ta !== null && tb === null) return -1;
-    return a.kmlIndex - b.kmlIndex;
-  });
 }

@@ -199,12 +199,15 @@ function writePhotoSheet(wb, plan) {
   ws.autoFilter = { from: { row: 1, column: 1 }, to: { row: plan.photos.length + 1, column: COLUMNS.length } };
 }
 
+// 「情報」の1行の高さ(pt)。KMZ が複数のときは、ファイル名などを1つ1行で書き、行の高さを行数に合わせる
+const INFO_LINE_HEIGHT_PT = 18.75;
+
 function writeInfoSheet(wb, album, plan, nowMs) {
   const ws = wb.addWorksheet('情報', { pageSetup: { ...PAGE_SETUP } });
   const rows = [
     ['項目', '内容'],
-    ['元の KMZ ファイル', album.fileName],
-    ['KML の Document 名', album.title || '(なし)'],
+    ['元の KMZ ファイル', album.files.map((f) => f.fileName).join('\n')],
+    ['KML の Document 名', album.titles.join('\n') || '(なし)'],
     ['写真の枚数', plan.photos.length],
     ['出力日時', excelJstDate(nowMs)],
     ['作成アプリ', APP_NAME],
@@ -220,10 +223,12 @@ function writeInfoSheet(wb, album, plan, nowMs) {
       cell.alignment = { horizontal: 'left', vertical: 'middle', wrapText: c === 1 };
       if (r === 0) cell.fill = HEADER_FILL;
     });
+    const lines = typeof values[1] === 'string' ? values[1].split('\n').length : 1;
+    if (lines > 1) row.height = INFO_LINE_HEIGHT_PT * lines;
   });
   ws.getCell('B5').numFmt = 'yyyy/mm/dd hh:mm:ss';
   ws.getColumn(1).width = 22;
-  // 内容の列幅は文字列の行だけで測る(日付・数値は短い)
-  const longest = Math.max(...rows.map((r) => (typeof r[1] === 'string' ? textWidth(r[1]) : 0)));
+  // 内容の列幅は文字列の行だけで、1行ずつ測る(日付・数値は短い)
+  const longest = Math.max(...rows.flatMap((r) => (typeof r[1] === 'string' ? r[1].split('\n').map(textWidth) : [0])));
   ws.getColumn(2).width = Math.min(80, Math.max(30, longest + 3));
 }

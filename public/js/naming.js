@@ -115,11 +115,25 @@ export function buildFolderName(album, nowMs) {
   return `${formatJstDate(dateMs)}_${title}`;
 }
 
+// 同じ名前が重なったら「名前 (2).kmz」のように番号を付ける(Windows に合わせて大文字・小文字は区別しない)
+function uniqueFileNames(names) {
+  const used = new Set();
+  return names.map((name) => {
+    const base = baseNameOf(name);
+    const ext = name.slice(base.length);
+    let result = name;
+    for (let n = 2; used.has(result.toLowerCase()); n++) result = `${base} (${n})${ext}`;
+    used.add(result.toLowerCase());
+    return result;
+  });
+}
+
 // 出力の計画(フォルダ名・各写真の番号・名称・ファイル名・KMZ と Excel の保存名)を作る。
-// album.photos は出力順(撮影日時の昇順)に並んでいること。
+// album は merge.js の buildAlbum の結果(photos は出力順、files は代表の KMZ が先頭)。
+// kmzFileNames は album.files と同じ順の、元の KMZ の保存名。
 export function buildOutputPlan(album, nowMs) {
-  // 元の KMZ はファイル名をそのまま使う(念のため使えない文字だけ除く)
-  const kmzFileName = sanitizeName(album.fileName, 120) || 'original.kmz';
+  // 元の KMZ はファイル名をそのまま使う(念のため使えない文字だけ除き、同じ名前が重なれば番号を付ける)
+  const kmzFileNames = uniqueFileNames(album.files.map((f) => sanitizeName(f.fileName, 120) || 'original.kmz'));
   const photos = album.photos.map((photo, i) => {
     const no = i + 1;
     return {
@@ -132,8 +146,9 @@ export function buildOutputPlan(album, nowMs) {
   return {
     folderName: buildFolderName(album, nowMs),
     photos,
-    kmzFileName,
-    // Excel は KMZ と同じ名前にする(20261029-ようらく台園地.kmz → 20261029-ようらく台園地.xlsx)
-    xlsxFileName: `${baseNameOf(kmzFileName) || '写真一覧'}.xlsx`
+    kmzFileNames,
+    // Excel は KMZ と同じ名前にする(20261029-ようらく台園地.kmz → 20261029-ようらく台園地.xlsx)。
+    // KMZ が複数のときは、いちばん早く撮った写真の KMZ(先頭)の名前にする
+    xlsxFileName: `${baseNameOf(kmzFileNames[0]) || '写真一覧'}.xlsx`
   };
 }

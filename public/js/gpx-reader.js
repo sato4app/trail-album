@@ -28,9 +28,9 @@ function distanceBetween(a, b) {
 }
 
 // GPX ファイル(File)を読み込み、移動経路の情報を返す。
-//   { fileName, title, pointCount, distanceM, startMs, endMs,
-//     segments: [{ points: [{ lat, lng, timeMs }], distanceM, startMs, endMs }] }
+//   { fileName, title, segments: [{ points: [{ lat, lng, timeMs }], distanceM, startMs, endMs }] }
 // segments は GPX の順。startMs・endMs は記録時刻の最初と最後(記録時刻が1つも無ければ null)。
+// 複数の GPX をまとめた合計(記録地点数・移動距離など)は merge.js の buildTrack で求める。
 export async function readGpx(file) {
   const doc = parseXml(await file.text());
   if (!doc || doc.documentElement.localName !== 'gpx') {
@@ -48,15 +48,10 @@ export async function readGpx(file) {
     throw new GpxError('GPX の中に移動経路の記録地点(trkpt)が見つかりませんでした。');
   }
 
-  const segments = pointLists.map(summarize);
-  const range = timeRange(segments.flatMap((s) => [s.startMs, s.endMs]));
   return {
     fileName: file.name,
     title: gpxTitle(doc),
-    segments,
-    pointCount: segments.reduce((sum, s) => sum + s.points.length, 0),
-    distanceM: segments.reduce((sum, s) => sum + s.distanceM, 0),
-    ...range
+    segments: pointLists.map(summarize)
   };
 }
 
