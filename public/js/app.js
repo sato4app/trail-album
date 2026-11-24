@@ -411,7 +411,7 @@ function showMap() {
   // 凡例: 写真の撮影場所と、GPX(A, B …)ごとの記録地点の色
   const legend = [];
   if (state.photoRows.length > 0) legend.push(legendItem(PHOTO_COLOR, `写真の撮影場所(${state.photoRows.length} 枚)`, 'is-photo'));
-  files.forEach((f, i) => legend.push(legendItem(trackColor(i), `${gpxLetter(i)} の記録地点`)));
+  files.forEach((f, i) => legend.push(legendItem(trackColor(i), `${gpxLetter(i)} の移動経路・記録地点`, 'is-track')));
   $('mapLegend').replaceChildren(...legend);
 }
 
@@ -421,6 +421,7 @@ function legendItem(color, text, className = '') {
   const dot = document.createElement('span');
   dot.className = 'legend-dot';
   dot.style.backgroundColor = color;
+  dot.style.color = color; // 経路の線(style.css の .is-track)の色
   span.append(dot, text);
   return span;
 }

@@ -634,9 +634,11 @@ body.is-resizing {
   text-align: center;
 }
 
-/* 地図(地理院地図)。Leaflet の重なり順を地図の中だけに閉じ込める */
+/* 地図(地理院地図)。列の幅いっぱいの正方形にする(ウインドウの幅を変えたり、KMZ と GPX の境界線を
+   動かしたりすると、大きさが付いてくる。地図の描き直しは map-view.js)。
+   Leaflet の重なり順を地図の中だけに閉じ込める */
 .map {
-  height: 380px;
+  aspect-ratio: 1 / 1;
   border: 1px solid var(--border);
   border-radius: 8px;
   isolation: isolate;
@@ -661,6 +663,25 @@ body.is-resizing {
   width: 9px;
   height: 9px;
   border-radius: 50%;
+}
+
+/* 経路は、点を線が貫く印(地図の線と同じく、少し薄くする) */
+.legend-item.is-track .legend-dot {
+  position: relative;
+  margin: 0 5px;
+}
+
+.legend-item.is-track .legend-dot::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: -6px;
+  right: -6px;
+  height: 3px;
+  border-radius: 2px;
+  background: currentColor;
+  opacity: 0.6;
+  transform: translateY(-50%);
 }
 
 /* 写真のマーカーは白い縁取りの大きめの丸 */
@@ -694,10 +715,6 @@ body.is-resizing {
   .thumb-missing {
     width: 64px;
     height: 64px;
-  }
-
-  .map {
-    height: 320px;
   }
 }
 

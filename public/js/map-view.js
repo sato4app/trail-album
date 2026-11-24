@@ -1,6 +1,6 @@
-// 地理院地図に、写真の撮影場所と、移動経路の記録地点をすべてマーカーで表示する
-// (Leaflet を CDN から読み込んで使う)。記録地点は数千になることもあるため、
-// 画像のマーカーではなく、canvas に描く円のマーカー(circleMarker)にする。
+// 地理院地図に、写真の撮影場所と、移動経路の記録地点をすべてマーカーで表示し、
+// 記録地点は経路ごとに記録の順に線で結ぶ(Leaflet を CDN から読み込んで使う)。
+// 記録地点は数千になることもあるため、画像のマーカーではなく、canvas に描く円のマーカー(circleMarker)にする。
 
 const GSI_TILE_URL = 'https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png';
 const GSI_ATTRIBUTION =
@@ -38,7 +38,14 @@ export function updateMap(container, { photos, tracks }) {
   map.invalidateSize(); // 隠れていた間に大きさが変わっていても合うように
   markers.clearLayers();
 
-  // 経路の記録地点(写真の下に描く)
+  // 経路の線と記録地点(写真の下に描く。先に加えたものほど下になる)。
+  // 線は経路(A-1, A-2 …)ごとに引き、別の経路どうしはつながない
+  for (const track of tracks) {
+    const color = trackColor(track.colorIndex);
+    L.polyline(track.points.map((p) => [p.lat, p.lng]), { color, weight: 3, opacity: 0.6 })
+      .bindTooltip(track.label, { sticky: true })
+      .addTo(markers);
+  }
   for (const track of tracks) {
     const color = trackColor(track.colorIndex);
     track.points.forEach((p, i) => {
