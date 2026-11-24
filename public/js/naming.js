@@ -195,22 +195,25 @@ function uniqueFileNames(names, reserved = []) {
 
 // 保存の計画: 出力フォルダ(名前 name)の中に置くものの名前を決める。
 //   { folderName, xlsxFileName, photos, kmz: [{ file, fileName }], gpx: [{ file, fileName }] }
-// - KMZ があれば、Excel(<名前>.xlsx)と写真(photos フォルダ)を必ず保存する。KMZ が無ければ、どちらも無し(null・[])
-// - includeKmz・includeGpx が true なら、読み込んだ KMZ・GPX(画面のファイルの一覧に出ているもの)を元のファイルのまま
-//   出力フォルダの直下に保存する。file は readKmz・readGpx の結果(kmzBytes・bytes を持つ)
+// - includeKmz が true なら、KMZ から作るもの全部(Excel(<名前>.xlsx)・写真(photos フォルダ)・元の KMZ)を保存する。
+//   false か KMZ が無ければ、どれも無し(xlsxFileName は null、ほかは [])
+// - includeGpx が true なら、元の GPX を保存する
+// - 元の KMZ・GPX は、画面のファイルの一覧に出ているものを、元のファイルのまま出力フォルダの直下に置く。
+//   file は readKmz・readGpx の結果(kmzBytes・bytes を持つ)
 // - 直下のファイル名が重なれば番号を付ける(Excel の名前を優先して残す)
 export function buildSavePlan({ album, track, name, includeKmz, includeGpx }) {
-  const kmzFiles = album && includeKmz ? album.files : [];
+  const useKmz = !!album && includeKmz;
+  const kmzFiles = useKmz ? album.files : [];
   const gpxFiles = track && includeGpx ? track.files.map((f) => f.source) : [];
   const names = uniqueFileNames([
-    ...(album ? [`${name}.xlsx`] : []),
+    ...(useKmz ? [`${name}.xlsx`] : []),
     ...kmzFiles.map((f) => sourceFileName(f.fileName, 'kmz', 'original')),
     ...gpxFiles.map((f) => sourceFileName(f.fileName, 'gpx', 'track'))
-  ], album ? [PHOTOS_DIR] : []);
+  ], useKmz ? [PHOTOS_DIR] : []);
   return {
     folderName: name,
-    xlsxFileName: album ? names.shift() : null,
-    photos: album ? planPhotos(album) : [],
+    xlsxFileName: useKmz ? names.shift() : null,
+    photos: useKmz ? planPhotos(album) : [],
     kmz: kmzFiles.map((file) => ({ file, fileName: names.shift() })),
     gpx: gpxFiles.map((file) => ({ file, fileName: names.shift() }))
   };

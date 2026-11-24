@@ -48,8 +48,8 @@ const state = {
   save: {
     defaultName: '',  // 名前の既定値(読み込んだ内容から作る: naming.js の defaultSaveName)
     edited: false,    // 利用者が名前を既定値から変えたか(変えたら、KMZ・GPX を追加しても名前を書き換えない)
-    includeKmz: true, // 元の KMZ・GPX も一緒に保存するか(読み込んでいない間も、選んだ状態を覚えておく)
-    includeGpx: true
+    includeKmz: true, // KMZ から作るもの(Excel・写真・元の KMZ)を保存するか(読み込んでいない間も、選んだ状態を覚えておく)
+    includeGpx: true  // 元の GPX を保存するか
   }
 };
 
@@ -557,7 +557,7 @@ function openPhoto(photo) {
 }
 
 // ===== 保存 =====
-// 保存の設定(名前・一緒に保存する元のファイル・保存先)と、保存される内容(フォルダ・ファイルの木)。
+// 保存の設定(名前・保存するもの・保存先)と、保存される内容(フォルダ・ファイルの木)。
 // 名前やチェックを変えるたびに、保存される内容を作り直す(renderSavePreview)。
 // 保存ボタンを押したときは、画面に出している内容と同じ規則(naming.js の buildSavePlan)で保存する。
 
@@ -654,7 +654,7 @@ function renderSavePreview() {
     button.setAttribute('aria-pressed', String(button.dataset.name === input.value));
   }
 
-  // 一緒に保存する元のファイル(読み込んでいない種類は押せなくし、チェックも外して見せる)
+  // 保存するもの: KMZ(Excel・写真・元の KMZ)と GPX(元の GPX)。読み込んでいない種類は押せなくし、チェックも外して見せる
   setIncludeCheck('includeKmz', album ? album.files.length : 0, state.save.includeKmz, busy);
   setIncludeCheck('includeGpx', track ? track.files.length : 0, state.save.includeGpx, busy);
 
@@ -668,8 +668,11 @@ function renderSavePreview() {
   });
   const noName = !check.name;
   const contents = [];
-  if (plan.xlsxFileName) contents.push(treeItem(plan.xlsxFileName, '写真の一覧(Excel)', 'file', [], noName));
-  if (album) contents.push(treeItem(PHOTOS_DIR, `写真 ${plan.photos.length} 枚(元の画質のまま)`, 'folder'));
+  if (plan.xlsxFileName) {
+    contents.push(treeItem(plan.xlsxFileName, '写真の一覧(Excel)', 'file', [], noName));
+    contents.push(treeItem(PHOTOS_DIR, `写真 ${plan.photos.length} 枚(元の画質のまま)`, 'folder'));
+  }
+  $('savePhotos').hidden = plan.photos.length === 0; // 写真を保存しないときは、写真のファイル名の一覧も出さない
   contents.push(...plan.kmz.map((k) => treeItem(k.fileName, '読み込んだ KMZ', 'file')));
   contents.push(...plan.gpx.map((g) => treeItem(g.fileName, '読み込んだ GPX', 'file')));
   const zipName = `${plan.folderName}.zip`;
@@ -689,10 +692,11 @@ function renderSavePreview() {
   }
 
   // 保存ボタンを押せないときは、理由をボタンの下に出す
+  const loadedKinds = [album && 'KMZ', track && 'GPX'].filter(Boolean).join(' か ');
   const reason = noName
     ? '名前を入力すると保存できます。'
     : contents.length === 0
-      ? '保存するファイルがありません。「元のファイル」の GPX にチェックを入れてください。'
+      ? `保存するものがありません。「保存するもの」の ${loadedKinds} にチェックを入れてください。`
       : '';
   $('saveBlocked').textContent = reason;
   $('saveBlocked').hidden = !reason;
@@ -700,7 +704,7 @@ function renderSavePreview() {
   $('btnSaveZip').disabled = busy || !!reason;
 }
 
-// 「元のファイル」のチェック。count はその種類の読み込んだファイルの数(0 なら押せなくし、チェックを外して見せる)
+// 「保存するもの」のチェック。count はその種類の読み込んだファイルの数(0 なら押せなくし、チェックを外して見せる)
 function setIncludeCheck(id, count, wanted, busy) {
   const box = $(id);
   box.checked = count > 0 && wanted;
@@ -827,14 +831,14 @@ function prepareOutput() {
   return { album: state.album, nowMs: Date.now(), plan };
 }
 
-// 保存の共通処理: Excel を作り(KMZ があるとき)、保存する内容(entries)をそろえて save に渡す。
+// 保存の共通処理: Excel を作り(KMZ を保存するとき)、保存する内容(entries)をそろえて save に渡す。
 // save(entries, onFileDone) は完了メッセージを返す。進み具合は、保存したファイルの数で出す
 async function runOutput(output, save, label) {
   setBusy(true);
   const { album, nowMs, plan } = output;
   try {
     const entries = [];
-    if (album) {
+    if (plan.xlsxFileName) {
       showProgress('Excel を作成中…');
       entries.push({ path: plan.xlsxFileName, data: await buildWorkbookBlob(album, plan, nowMs) });
       entries.push(...plan.photos.map((p) => ({ path: `${PHOTOS_DIR}/${p.fileName}`, data: p.bytes })));

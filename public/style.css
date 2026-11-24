@@ -950,18 +950,19 @@ body.is-resizing {
   color: var(--error);
 }
 
-/* 一緒に保存する元のファイル(KMZ・GPX) */
+/* 保存するもの(KMZ・GPX)。1つ1行にし、何が保存されるかを右に添える */
 .save-checks {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px 24px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
   padding-top: 7px;
 }
 
-.save-checks .field-help {
-  flex-basis: 100%;
-  margin: 0;
+.check-desc {
+  margin-left: 6px;
+  color: var(--muted);
+  font-size: 0.85rem;
 }
 
 .check {

@@ -155,7 +155,7 @@
       <h2 id="outputTitle"><span class="step">3</span>保存する</h2>
       <p class="hint">
         写真の一覧の Excel ファイルと、元の画質の写真を入れた「photos」フォルダを、1つのフォルダにまとめて保存します。
-        読み込んだ KMZ・GPX ファイルも、元のファイルのまま一緒に保存できます(GPX だけでも保存できます)。
+        読み込んだ KMZ・GPX ファイルも、元のファイルのまま一緒に保存できます(GPX だけでも保存できます)。保存するものは「KMZ」「GPX」のチェックで選べます。
         何がどんな名前で保存されるかは、下の「保存される内容」で確かめられます。
       </p>
       <!-- 保存方法の使い分け(フォルダに保存できないブラウザでは、その項目を隠す: app.js) -->
@@ -173,7 +173,7 @@
           人に送る・持ち運ぶときに向いています。展開してから Excel ファイルを開いてください(展開せずに開くと、写真へのリンクが働きません)。
         </li>
       </ul>
-      <!-- 保存の設定: 名前・一緒に保存する元のファイル・保存先。変えるとすぐ「保存される内容」に反映する(app.js) -->
+      <!-- 保存の設定: 名前・保存するもの・保存先。変えるとすぐ「保存される内容」に反映する(app.js) -->
       <div class="save-form">
         <div class="save-field">
           <label class="save-label" for="saveName">名前</label>
@@ -190,17 +190,19 @@
             <p class="field-note" id="saveNameNote" hidden></p>
           </div>
         </div>
+        <!-- 保存するもの: KMZ は KMZ から作るもの全部(Excel・写真・元の KMZ)、GPX は元の GPX をまとめて切り替える -->
         <div class="save-field" role="group" aria-labelledby="includeLabel">
-          <span class="save-label" id="includeLabel">元のファイル</span>
+          <span class="save-label" id="includeLabel">保存するもの</span>
           <div class="save-field-body save-checks">
-            <span class="field-help">一緒に保存する(読み込んだファイルのまま)</span>
             <label class="check">
               <input type="checkbox" id="includeKmz">
-              <span>KMZ <span class="check-count" id="includeKmzCount"></span></span>
+              <span>KMZ <span class="check-count" id="includeKmzCount"></span>
+                <span class="check-desc">写真の一覧(Excel)・写真(photos)・元の KMZ ファイル</span></span>
             </label>
             <label class="check">
               <input type="checkbox" id="includeGpx">
-              <span>GPX <span class="check-count" id="includeGpxCount"></span></span>
+              <span>GPX <span class="check-count" id="includeGpxCount"></span>
+                <span class="check-desc">元の GPX ファイル</span></span>
             </label>
           </div>
         </div>
