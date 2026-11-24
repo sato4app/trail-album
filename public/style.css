@@ -601,18 +601,18 @@ body.is-resizing {
   font-weight: 400;
 }
 
-/* 写真の大きさは、右の4つのボタンを縦に並べた高さ(ボタンの高さ × 4 + 間 × 3)に合わせる */
+/* 写真の大きさは、右の3つのボタンを縦に並べた高さ(ボタンの高さ × 3 + 間 × 2)に合わせる */
 .photo-table {
   --mini-btn-height: 26px;
   --mini-btn-gap: 4px;
-  --thumb-size: calc(var(--mini-btn-height) * 4 + var(--mini-btn-gap) * 3);
+  --thumb-size: calc(var(--mini-btn-height) * 3 + var(--mini-btn-gap) * 2);
 }
 
 .photo-table .col-thumb {
   width: calc(var(--thumb-size) + 24px); /* 写真と、左右の余白(12px ずつ) */
 }
 
-/* 写真の右のボタン(拡大表示・縮小版をコピー・画像をコピー・画像を保存)を縦に並べる */
+/* 写真の右のボタン(拡大表示・画像をコピー・画像を保存)を縦に並べる */
 .photo-table .col-actions {
   width: 1%; /* ボタンの幅だけにする */
   padding-left: 0;
