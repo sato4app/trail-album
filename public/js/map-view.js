@@ -134,7 +134,8 @@ function fitToArea() {
 }
 
 // 地図の右下に、ズームレベルのボタン(「Z=16.3」。整数なら小数を付けない)を出す。
-// ボタンを押すと、その右にズームレベルを変えるスライドバーを開く(もう一度押すか Esc で閉じる)。
+// ボタンを押すと、その左にズームレベルを変えるスライドバーを開く(もう一度押すか Esc で閉じる)。
+// ボタンは右端の同じ位置のままにする(開け閉めでボタンが動かないように)。
 // スライドバーは MAP_MIN_ZOOM〜MAP_MAX_ZOOM を ZOOM_SNAP(0.1)刻みで動かし、地図の中心を保ったまま拡大・縮小する。
 function addZoomControl(L) {
   // 表示する小数の桁数(ZOOM_SNAP が 0.1 なら1桁)
@@ -143,12 +144,8 @@ function addZoomControl(L) {
 
   const control = L.control({ position: 'bottomright' });
   control.onAdd = () => {
+    // 左にスライドバー、右にボタンを置く(見た目の並びと、Tab キーで移る順をそろえる)
     const div = L.DomUtil.create('div', 'map-zoom');
-    const button = L.DomUtil.create('button', 'map-zoom-button', div);
-    button.type = 'button';
-    button.title = 'ズームレベル(押すと、ズームレベルを変えるスライドバーを開きます)';
-    button.setAttribute('aria-expanded', 'false');
-    button.setAttribute('aria-controls', 'mapZoomSlider');
     const slider = L.DomUtil.create('input', 'map-zoom-slider', div);
     slider.type = 'range';
     slider.id = 'mapZoomSlider';
@@ -157,6 +154,11 @@ function addZoomControl(L) {
     slider.step = String(ZOOM_SNAP);
     slider.hidden = true;
     slider.setAttribute('aria-label', 'ズームレベル');
+    const button = L.DomUtil.create('button', 'map-zoom-button', div);
+    button.type = 'button';
+    button.title = 'ズームレベル(押すと、ズームレベルを変えるスライドバーを開きます)';
+    button.setAttribute('aria-expanded', 'false');
+    button.setAttribute('aria-controls', 'mapZoomSlider');
 
     // ボタンの文字(スライドバーを動かしている間は、選んでいる値を先に出す)
     const showZoom = (zoom) => {
