@@ -1,4 +1,4 @@
-// 写真の一覧のボタンの処理(画像をコピー・画像を保存)
+// 写真の一覧のボタンの処理(写真をコピー・写真を保存)
 import { convertToPng } from './thumbnail.js';
 import { downloadBlob } from './saver.js';
 

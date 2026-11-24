@@ -2,7 +2,8 @@
 // 記録地点は経路ごとに記録の順に線で結ぶ(Leaflet を CDN から読み込んで使う)。
 // 記録地点は数千になることもあるため、画像のマーカーではなく、canvas に描く円のマーカー(circleMarker)にする。
 // 地図は、読み込んだ地点すべての東西南北の端が収まるように合わせる(地点の数や偏りに左右されない)。
-// 右下に、ズームレベルのボタン(押すとズームレベルを変えるスライドバーを開く)と、縮尺の目盛りを出す。
+// 右下に、「＋」「−」ボタン(左上のものと同じ)・ズームレベルのボタン(押すとズームレベルを変えるスライドバーを開く)・
+// 縮尺の目盛りを出す。
 // 地図の設定値(ズームレベルの範囲・色・マーカーの大きさなど)は constants.js に置く。
 import {
   GSI_TILE_URL,
@@ -11,6 +12,7 @@ import {
   MAP_MIN_ZOOM,
   MAP_MAX_ZOOM,
   ZOOM_SNAP,
+  ZOOM_SLIDER_AUTO_CLOSE_SEC,
   INITIAL_CENTER,
   INITIAL_ZOOM,
   FIT_MAX_ZOOM,
@@ -49,10 +51,11 @@ export function updateMap(container, { photos, tracks }, { fit = true } = {}) {
       .setView(INITIAL_CENTER, INITIAL_ZOOM);
     L.tileLayer(GSI_TILE_URL, { attribution: GSI_ATTRIBUTION, ...zoomRange, maxNativeZoom: GSI_TILE_MAX_NATIVE_ZOOM })
       .addTo(map);
-    // 右下に、上からズームレベルのボタンとスライドバー・縮尺の目盛り(m・km)・地図の出典を並べる
-    // (右下の欄は、後から加えたものほど上に積まれる)
+    // 右下に、上から「＋」「−」ボタン・ズームレベルのボタンとスライドバー・縮尺の目盛り(m・km)・地図の出典を並べる
+    // (右下の欄は、後から加えたものほど上に積まれる。左上の「＋」「−」ボタンも Leaflet の既定のまま残す)
     L.control.scale({ position: 'bottomright', imperial: false }).addTo(map);
     addZoomControl(L);
+    L.control.zoom({ position: 'bottomright', zoomInTitle: '拡大', zoomOutTitle: '縮小' }).addTo(map);
     markers = L.featureGroup().addTo(map);
     // 利用者が地図を動かした(ドラッグ・拡大・縮小)後は、大きさが変わっても合わせ直さない
     map.on('movestart', () => {
@@ -135,6 +138,8 @@ function fitToArea() {
 
 // 地図の右下に、ズームレベルのボタン(「Z=16.3」。整数なら小数を付けない)を出す。
 // ボタンを押すと、その左にズームレベルを変えるスライドバーを開く(もう一度押すか Esc で閉じる)。
+// 地図を拡大・縮小したとき(「＋」「−」ボタン・ホイール・ダブルクリックなど)も開き、こちらは
+// 操作が無いまま ZOOM_SLIDER_AUTO_CLOSE_SEC 秒たったら閉じる(ボタンで開いたときは、自動では閉じない)。
 // ボタンは右端の同じ位置のままにする(開け閉めでボタンが動かないように)。
 // スライドバーは MAP_MIN_ZOOM〜MAP_MAX_ZOOM を ZOOM_SNAP(0.1)刻みで動かし、地図の中心を保ったまま拡大・縮小する。
 function addZoomControl(L) {
@@ -171,40 +176,94 @@ function addZoomControl(L) {
     // 地図は拡大・縮小の動きを見せながら変える(一気に変えると地図の画像をすべて読み直し、ちらつくため)。
     // 動いている間に選んだ値は Leaflet が受け付けないので、動き終えるたび(zoomend)に、選んだ値へ向けて動かし直す
     let target = null;
+    let zoomingBySlider = false; // 今の拡大・縮小は、スライドバーで選んだ値へ向けたものか
     const follow = () => {
       if (target === null) return;
       if (Math.abs(target - map.getZoom()) < 1e-6) {
         target = null;
         return;
       }
+      zoomingBySlider = true;
       map.setZoom(target);
     };
-    // 地図のズームレベルが変わったら(スライドバー・＋−ボタン・ホイール・地図を合わせたとき)、表示を合わせる
+
+    // スライドバーをどう開いたか: null(閉じている)・'button'(ボタンで開いた。自動では閉じない)・
+    // 'zoom'(地図を拡大・縮小したので開いた。操作が無いまま ZOOM_SLIDER_AUTO_CLOSE_SEC 秒たったら閉じる)
+    let openedBy = null;
+    let closeTimer = 0;
+    let pointerInside = false; // マウスがボタン・スライドバーの上にある(タッチなら触れている)間は閉じない
+    let pressing = false;      // スライドバーを押さえている(ドラッグしている)間は閉じない
+
+    const setOpen = (by) => {
+      openedBy = by;
+      const open = by !== null;
+      slider.hidden = !open;
+      button.setAttribute('aria-expanded', String(open));
+      button.title = `ズームレベル(押すと、ズームレベルを変えるスライドバーを${open ? '閉じます' : '開きます'})`;
+      restartCloseTimer();
+    };
+    // 自動で開いたときは、操作が無いまま ZOOM_SLIDER_AUTO_CLOSE_SEC 秒たったら閉じる(操作するたびに数え直す)
+    const restartCloseTimer = () => {
+      clearTimeout(closeTimer);
+      if (openedBy !== 'zoom' || pointerInside || pressing) return;
+      closeTimer = setTimeout(() => {
+        // キーボードでスライドバーを操作していた人が、フォーカスを失わないように
+        if (document.activeElement === slider) button.focus();
+        setOpen(null);
+      }, ZOOM_SLIDER_AUTO_CLOSE_SEC * 1000);
+    };
+
+    // 地図のズームレベルが変わったら(スライドバー・＋−ボタン・ホイール・地図を合わせたとき)、表示を合わせる。
+    // 利用者が拡大・縮小したときは、スライドバーを開く(開いていれば、閉じるまでの秒数を数え直す)。
+    // 地点に地図を合わせたとき(読み込んだ・地図の大きさが変わった)と、スライドバーで変えたときは開かない
     map.on('zoomend', () => {
+      const bySlider = zoomingBySlider;
+      zoomingBySlider = false;
       follow();
       if (target === null) {
         showZoom(map.getZoom());
         slider.value = format(map.getZoom());
       }
+      if (fitting) return;
+      if (openedBy !== null) restartCloseTimer();
+      else if (!bySlider) setOpen('zoom');
     });
     L.DomEvent.on(slider, 'input', () => {
       target = Number(slider.value);
       showZoom(target);
       follow();
+      restartCloseTimer();
     });
 
-    const setOpen = (open) => {
-      slider.hidden = !open;
-      button.setAttribute('aria-expanded', String(open));
-      button.title = `ズームレベル(押すと、ズームレベルを変えるスライドバーを${open ? '閉じます' : '開きます'})`;
-    };
-    L.DomEvent.on(button, 'click', () => setOpen(slider.hidden));
+    L.DomEvent.on(button, 'click', () => setOpen(openedBy === null ? 'button' : null));
     L.DomEvent.on(div, 'keydown', (e) => {
       L.DomEvent.stopPropagation(e); // 地図のキー操作(矢印キーで地図を動かすなど)に渡さない
-      if (e.key === 'Escape' && !slider.hidden) {
-        setOpen(false);
+      if (e.key === 'Escape' && openedBy !== null) {
+        setOpen(null);
         button.focus();
+      } else {
+        restartCloseTimer();
       }
+    });
+    L.DomEvent.on(div, 'pointerenter', () => {
+      pointerInside = true;
+      restartCloseTimer();
+    });
+    L.DomEvent.on(div, 'pointerleave', () => {
+      pointerInside = false;
+      restartCloseTimer();
+    });
+    L.DomEvent.on(slider, 'pointerdown', () => {
+      pressing = true;
+      restartCloseTimer();
+      const release = () => {
+        pressing = false;
+        document.removeEventListener('pointerup', release);
+        document.removeEventListener('pointercancel', release);
+        restartCloseTimer();
+      };
+      document.addEventListener('pointerup', release);
+      document.addEventListener('pointercancel', release);
     });
     // ボタン・スライドバーの操作で、地図がドラッグ・拡大されないように
     L.DomEvent.disableClickPropagation(div);

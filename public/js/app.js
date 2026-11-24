@@ -465,7 +465,7 @@ function cell(text, className) {
 }
 
 // 写真の一覧の1行: 1列目に No.(a-1 など)・名称・撮影日時・緯度, 経度を1行ずつ、2列目に写真、
-// 3列目にボタン(拡大表示・画像をコピー・画像を保存)
+// 3列目にボタン(拡大表示・写真をコピー・写真を保存)
 function photoRow(photo) {
   const tr = document.createElement('tr');
 
@@ -512,14 +512,14 @@ function photoRow(photo) {
   const notViewable = photo.thumb ? '' : 'この形式は表示できません';
   const noCopy = canCopyImage
     ? notViewable
-    : 'このブラウザでは画像をコピーできません(Chrome・Edge などで使えます)';
+    : 'このブラウザでは写真をコピーできません(Chrome・Edge などで使えます)';
   const actions = document.createElement('div');
   actions.className = 'photo-actions';
   actions.append(
     actionButton(photo, '拡大表示', '元の写真を大きく表示します', notViewable, () => openPhoto(photo)),
-    actionButton(photo, '画像をコピー', '元の大きさの画像をコピーします。そのまま貼り付けて使えます',
+    actionButton(photo, '写真をコピー', '元の大きさの写真をコピーします。そのまま貼り付けて使えます',
       noCopy, (button) => onCopyImage(button, photo.blob)),
-    actionButton(photo, '画像を保存', `元の写真を「${photo.fileName}」としてダウンロードします`,
+    actionButton(photo, '写真を保存', `元の写真を「${photo.fileName}」としてダウンロードします`,
       '', () => saveImage(photo))
   );
   const actionsCell = cell('', 'col-actions');
