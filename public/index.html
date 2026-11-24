@@ -67,12 +67,10 @@
             <div class="table-wrap">
               <table class="data-table photo-table">
                 <thead>
+                  <!-- 1列目に No.・名称・撮影日時・緯度, 経度を1行ずつ、2列目に写真(app.js の photoRow) -->
                   <tr>
-                    <th class="col-no" scope="col">No.</th>
+                    <th class="col-info" scope="col">No. / 名称 / 撮影日時 / 緯度, 経度</th>
                     <th class="col-thumb" scope="col">写真</th>
-                    <th class="col-name" scope="col">名称</th>
-                    <th class="col-time" scope="col">撮影日時</th>
-                    <th class="col-pos" scope="col">緯度, 経度</th>
                   </tr>
                 </thead>
                 <tbody id="photoRows"></tbody>

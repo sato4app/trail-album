@@ -291,8 +291,26 @@ function cell(text, className) {
   return td;
 }
 
+// 写真の一覧の1行: 1列目に No.・名称・撮影日時・緯度, 経度を1行ずつ、2列目に写真
 function photoRow(photo) {
   const tr = document.createElement('tr');
+
+  const infoCell = cell('', 'col-info');
+  const line = (text, className) => {
+    const div = document.createElement('div');
+    div.className = className;
+    div.textContent = text;
+    infoCell.append(div);
+    return div;
+  };
+  line(`No.${photo.no}`, 'info-no');
+  const nameLine = line(photo.displayName, 'info-name');
+  if (!photo.name) nameLine.classList.add('is-fallback');
+  nameLine.title = `保存するファイル名: ${photo.fileName}`;
+  const hasTime = Number.isFinite(photo.timeMs);
+  const timeLine = line(hasTime ? formatJstDateTime(photo.timeMs) : '(撮影日時なし)', 'info-time');
+  if (!hasTime) timeLine.classList.add('is-empty');
+  line(`${photo.lat.toFixed(6)}, ${photo.lng.toFixed(6)}`, 'info-pos');
 
   const thumbCell = cell('', 'col-thumb');
   if (photo.thumb) {
@@ -316,22 +334,7 @@ function photoRow(photo) {
     thumbCell.append(span);
   }
 
-  const nameCell = cell(photo.displayName, 'col-name');
-  if (!photo.name) nameCell.classList.add('is-fallback');
-  nameCell.dataset.no = String(photo.no); // スマートフォン表示で名称の前に No. を出す(style.css)
-  nameCell.title = `保存するファイル名: ${photo.fileName}`;
-
-  const time = Number.isFinite(photo.timeMs) ? formatJstDateTime(photo.timeMs) : '(なし)';
-  const timeCell = cell(time, 'col-time');
-  if (!Number.isFinite(photo.timeMs)) timeCell.classList.add('is-empty');
-
-  tr.append(
-    cell(String(photo.no), 'col-no'),
-    thumbCell,
-    nameCell,
-    timeCell,
-    cell(`${photo.lat.toFixed(6)}, ${photo.lng.toFixed(6)}`, 'col-pos')
-  );
+  tr.append(infoCell, thumbCell);
   return tr;
 }
 

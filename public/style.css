@@ -293,8 +293,6 @@ main {
 
 .preview-col {
   min-width: 0;
-  /* 写真の一覧の表示を、画面の幅ではなく列の幅で切り替える(下の @container) */
-  container-type: inline-size;
 }
 
 .preview-col:first-child {
@@ -416,12 +414,6 @@ main {
   font-variant-numeric: tabular-nums;
 }
 
-.data-table td.is-fallback,
-.data-table td.is-empty {
-  color: var(--muted);
-  font-weight: 400;
-}
-
 /* 経路ごとの内訳(GPX) */
 .seg-title {
   margin: 14px 0 6px;
@@ -440,21 +432,45 @@ main {
   font-variant-numeric: tabular-nums;
 }
 
-/* 写真の一覧(KMZ) */
-
-.photo-table .col-thumb {
-  width: 112px;
+/* 記録時刻が無い経路 */
+.seg-table .is-empty {
+  color: var(--muted);
 }
 
-.photo-table td.col-name {
-  font-weight: 600;
+/* 写真の一覧(KMZ): 1列目に No.・名称・撮影日時・緯度, 経度を1行ずつ、2列目に写真 */
+.photo-table thead .col-info {
+  white-space: normal; /* 見出しが長いので、狭い画面では折り返す */
+}
+
+.photo-table .col-info > div {
   overflow-wrap: anywhere;
 }
 
-.photo-table .col-time,
-.photo-table .col-pos {
-  white-space: nowrap;
+.photo-table .info-no,
+.photo-table .info-pos {
+  color: var(--muted);
+  font-size: 0.85rem;
   font-variant-numeric: tabular-nums;
+}
+
+.photo-table .info-name {
+  font-weight: 600;
+}
+
+.photo-table .info-time {
+  font-size: 0.9rem;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 名称が無い(「写真001」のように番号で補った)・撮影日時が無いとき */
+.photo-table .is-fallback,
+.photo-table .is-empty {
+  color: var(--muted);
+  font-weight: 400;
+}
+
+.photo-table .col-thumb {
+  width: 112px;
 }
 
 .thumb-button {
@@ -499,63 +515,6 @@ main {
 @media (max-width: 640px) {
   .card {
     padding: 16px 14px 18px;
-  }
-}
-
-/* 列が狭いとき(KMZ と GPX を左右に並べたとき・スマートフォン): 写真の一覧を1枚ずつのカードにする */
-@container (max-width: 640px) {
-  .photo-table thead {
-    display: none;
-  }
-
-  .photo-table tbody tr {
-    display: grid;
-    grid-template-columns: 88px 1fr;
-    grid-template-areas:
-      "thumb name"
-      "thumb time"
-      "thumb pos";
-    column-gap: 12px;
-    align-items: center;
-    padding: 10px 12px;
-    border-bottom: 1px solid var(--border);
-  }
-
-  .photo-table tbody tr:last-child {
-    border-bottom: none;
-  }
-
-  .photo-table td {
-    padding: 0;
-    border: none;
-  }
-
-  .photo-table td.col-no {
-    display: none;
-  }
-
-  .photo-table td.col-thumb {
-    grid-area: thumb;
-    width: auto;
-  }
-
-  .photo-table td.col-name {
-    grid-area: name;
-  }
-
-  .photo-table td.col-name::before {
-    content: "No." attr(data-no) " ";
-  }
-
-  .photo-table td.col-time {
-    grid-area: time;
-    font-size: 0.9rem;
-  }
-
-  .photo-table td.col-pos {
-    grid-area: pos;
-    font-size: 0.85rem;
-    color: var(--muted);
   }
 }
 
