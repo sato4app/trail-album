@@ -70,13 +70,14 @@ function segmentKey(segment) {
 // loaded は変えずに、新しい配列を返す。
 //   { segments, added, replaced, skipped }
 //   added: 新しく加えた経路 / replaced: 読み込み済みの同じ経路と置き換えた経路 / skipped: 加えなかった経路
-// 各経路には、読み込んだ GPX のファイル名(fileName)・トラック名(title)を付ける。
+// 各経路には、読み込んだ GPX(source: track。同じ名前の別のファイルとも見分けられるよう、ファイル名ではなく
+// 読み込んだもの自体)を付ける。
 export function addSegments(loaded, track) {
   const segments = [...loaded];
   const indexByKey = new Map(segments.map((s, i) => [segmentKey(s), i]));
   const result = { segments, added: [], replaced: [], skipped: [] };
   for (const seg of track.segments) {
-    const segment = { ...seg, fileName: track.fileName, title: track.title };
+    const segment = { ...seg, source: track };
     const key = segmentKey(segment);
     const i = indexByKey.get(key);
     if (i === undefined) {
@@ -93,28 +94,24 @@ export function addSegments(loaded, track) {
   return result;
 }
 
-// 読み込んだ経路(loaded。読み込んだ順)をまとめる。何も無ければ null。
-//   { files, titles, segments, pointCount, distanceM, startMs, endMs }
-// - segments は記録の日時の順(記録時刻の無い経路は、読み込んだ順で末尾)
-// - files(GPX のファイル名)・titles(トラック名)も、その順に重なりを除いて並べる
-// - startMs・endMs は全体の記録時刻の最初と最後(記録時刻が1つも無ければ null)
+// 読み込んだ経路(loaded。読み込んだ順)を GPX ごとにまとめる。何も無ければ null。
+//   { files: [{ source, segments }], segmentCount, pointCount, distanceM }
+// - files は、いちばん早く記録した経路の順(画面の A, B … の順)。source は readGpx の結果
+// - 各 GPX の segments は記録の日時の順(記録時刻の無い経路は、読み込んだ順で末尾)
 export function buildTrack(loaded) {
   if (loaded.length === 0) return null;
-  const segments = loaded
+  const sorted = loaded
     .map((segment, order) => ({ segment, order }))
     .sort((a, b) => compareTime(a.segment.startMs, b.segment.startMs) || a.order - b.order)
     .map((e) => e.segment);
-  let endMs = null;
-  for (const s of segments) {
-    if (s.endMs !== null && (endMs === null || s.endMs > endMs)) endMs = s.endMs;
-  }
+  const files = unique(sorted.map((s) => s.source)).map((source) => ({
+    source,
+    segments: sorted.filter((s) => s.source === source)
+  }));
   return {
-    files: unique(segments.map((s) => s.fileName)),
-    titles: unique(segments.map((s) => s.title).filter(Boolean)),
-    segments,
-    pointCount: segments.reduce((sum, s) => sum + s.points.length, 0),
-    distanceM: segments.reduce((sum, s) => sum + s.distanceM, 0),
-    startMs: segments[0].startMs, // 記録時刻のある経路が先に並ぶので、先頭が最初
-    endMs
+    files,
+    segmentCount: sorted.length,
+    pointCount: sorted.reduce((sum, s) => sum + s.points.length, 0),
+    distanceM: sorted.reduce((sum, s) => sum + s.distanceM, 0)
   };
 }

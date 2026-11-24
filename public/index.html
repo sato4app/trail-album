@@ -10,7 +10,14 @@
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%232f6b4f'/%3E%3Cpath d='M4 25 12 11l5 8 4-5 7 11z' fill='%23fff'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="style.css">
   <!-- 外部ライブラリ(バージョン固定・改ざん検知付き)
-       JSZip: KMZ の展開・ZIP の作成 / ExcelJS: 写真の一覧の Excel(.xlsx)の作成 -->
+       JSZip: KMZ の展開・ZIP の作成 / ExcelJS: 写真の一覧の Excel(.xlsx)の作成 /
+       Leaflet: 地理院地図の表示(写真の撮影場所・移動経路の記録地点) -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css"
+    integrity="sha384-sHL9NAb7lN7rfvG5lfHpm643Xkcjzp4jFvuavGOndn6pjVqS6ny56CAt3nsEVT4H"
+    crossorigin="anonymous">
+  <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"
+    integrity="sha384-cxOPjt7s7Iz04uaHJceBmS+qpjv2JkIHNVcuOrM+YHwZOmJGBXI00mdUXEq65HTH"
+    crossorigin="anonymous" defer></script>
   <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"
     integrity="sha384-+mbV2IY1Zk/X1p/nWllGySJSUN8uMs+gUAN10Or95UBH0fpj6GfKgPmgC5EXieXG"
     crossorigin="anonymous" defer></script>
@@ -64,20 +71,20 @@
           </div>
           <p class="preview-empty" id="kmzEmpty">KMZ ファイルは読み込んでいません。</p>
           <div id="kmzPreview" hidden>
+            <!-- 概要: ファイル名(a, b … の記号付き)と写真の枚数 -->
             <dl class="summary">
               <div><dt>KMZ ファイル</dt><dd id="sumFile"></dd></div>
-              <div><dt>Document 名</dt><dd id="sumTitle"></dd></div>
               <div><dt>写真の枚数</dt><dd id="sumCount"></dd></div>
-              <div><dt>出力フォルダ名(予定)</dt><dd id="sumFolder"></dd></div>
             </dl>
-            <p class="hint">並び順は出力と同じ(撮影日時の順)です。写真を押すと元の写真を大きく表示します。</p>
+            <p class="hint">KMZ(a, b …)ごとに、撮影日時の順に並べています。写真を押しても、元の写真を大きく表示します。</p>
             <div class="table-wrap">
               <table class="data-table photo-table">
                 <thead>
-                  <!-- 1列目に No.・名称・撮影日時・緯度, 経度を1行ずつ、2列目に写真(app.js の photoRow) -->
+                  <!-- 1列目に No.・名称・撮影日時・緯度, 経度を1行ずつ、2列目に写真、3列目にボタン(app.js の photoRow) -->
                   <tr>
                     <th class="col-info" scope="col">No. / 名称 / 撮影日時 / 緯度, 経度</th>
                     <th class="col-thumb" scope="col">写真</th>
+                    <th class="col-actions" scope="col">操作</th>
                   </tr>
                 </thead>
                 <tbody id="photoRows"></tbody>
@@ -95,32 +102,38 @@
           </div>
           <p class="preview-empty" id="gpxEmpty">GPX ファイルは読み込んでいません。</p>
           <div id="gpxPreview" hidden>
+            <!-- 概要: ファイル名(A, B … の記号付き)と記録地点数・移動距離 -->
             <dl class="summary">
               <div><dt>GPX ファイル</dt><dd id="gpxFile"></dd></div>
-              <div><dt>トラック名</dt><dd id="gpxTitle"></dd></div>
               <div><dt>記録地点数</dt><dd id="gpxPoints"></dd></div>
               <div><dt>移動距離</dt><dd id="gpxDistance"></dd></div>
-              <div><dt>記録の日時</dt><dd id="gpxTime"></dd></div>
-              <div><dt>所要時間</dt><dd id="gpxDuration"></dd></div>
             </dl>
             <p class="hint">GPX は内容を確かめるためだけに読み込みます(保存する内容には含みません)。</p>
-            <!-- 経路が2本以上のときだけ、経路ごとの内訳を出す -->
-            <div id="segBlock" hidden>
-              <h4 class="seg-title">経路ごとの内訳</h4>
-              <div class="table-wrap">
-                <table class="data-table seg-table">
-                  <thead>
-                    <tr>
-                      <th class="col-no" scope="col">No.</th>
-                      <th class="col-time" scope="col">記録の日時 / GPX ファイル</th>
-                      <th class="col-num" scope="col">地点数</th>
-                      <th class="col-num" scope="col">移動距離</th>
-                    </tr>
-                  </thead>
-                  <tbody id="segRows"></tbody>
-                </table>
-              </div>
+            <!-- 経路ごとの内訳(GPX ごとに、ファイル名の行の下へ A-1, A-2 … と並べる) -->
+            <h4 class="sub-title">経路ごとの内訳</h4>
+            <div class="table-wrap">
+              <table class="data-table seg-table">
+                <thead>
+                  <tr>
+                    <th class="col-no" scope="col">No.</th>
+                    <th class="col-time" scope="col">記録の日時</th>
+                    <th class="col-num" scope="col">地点数</th>
+                    <th class="col-num" scope="col">移動距離</th>
+                  </tr>
+                </thead>
+                <tbody id="segRows"></tbody>
+              </table>
             </div>
+          </div>
+
+          <!-- 地図(KMZ・GPX のどちらかを読み込んでいるときに出す: app.js の showMap) -->
+          <div class="map-block" id="mapBlock" hidden>
+            <h4 class="sub-title">地図(地理院地図)</h4>
+            <div class="map" id="map"></div>
+            <p class="map-legend" id="mapLegend"></p>
+            <p class="message" id="mapError" data-kind="error" hidden>
+              地図を表示できませんでした。インターネットに接続していることを確かめてから、ページを再読み込みしてください。
+            </p>
           </div>
         </section>
       </div>
@@ -130,8 +143,9 @@
     <section class="card" id="outputSection" aria-labelledby="outputTitle" hidden>
       <h2 id="outputTitle"><span class="step">3</span>保存する</h2>
       <p class="hint">
-        写真の一覧の Excel ファイル(KMZ と同じ名前の .xlsx)と、元の画質の写真を入れた「photos」フォルダを、上の出力フォルダ名でまとめて保存します。
+        写真の一覧の Excel ファイル(KMZ と同じ名前の .xlsx)と、元の画質の写真を入れた「photos」フォルダを、1つのフォルダにまとめて保存します。
         KMZ が複数のときは、いちばん早く撮った写真の KMZ の名前を使います。
+        フォルダ名・ファイル名は、保存の前に確認の画面で確かめられます。
       </p>
       <!-- 保存方法の使い分け(フォルダに保存できないブラウザでは、その項目を隠す: app.js) -->
       <ul class="save-guide">

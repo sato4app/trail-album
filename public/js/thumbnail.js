@@ -44,6 +44,24 @@ export async function createThumbnail(blob) {
   }
 }
 
+// 画像(Blob)を PNG に変換する(クリップボードへのコピー用: ブラウザが書き込めるのは PNG だけのため)。
+// 大きさは元のまま。EXIF の向きを反映する。PNG ならそのまま返す
+export async function convertToPng(blob) {
+  if (blob.type === 'image/png') return blob;
+  const source = await decodeImage(blob);
+  try {
+    const canvas = document.createElement('canvas');
+    canvas.width = source.width;
+    canvas.height = source.height;
+    canvas.getContext('2d').drawImage(source.image, 0, 0);
+    const png = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
+    if (!png) throw new Error('PNG に変換できませんでした');
+    return png;
+  } finally {
+    source.close();
+  }
+}
+
 // 画像を読み込む。EXIF の向き(縦向きで撮った写真など)を反映する。
 // createImageBitmap が使えない・失敗したときは <img> で読み込む(<img> も EXIF の向きを反映する)。
 async function decodeImage(blob) {

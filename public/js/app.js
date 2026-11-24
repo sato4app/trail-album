@@ -7,6 +7,8 @@ import { readKmz, KmzError } from './kmz-reader.js';
 import { readGpx, GpxError } from './gpx-reader.js';
 import { excludeLoadedPhotos, buildAlbum, addSegments, buildTrack } from './merge.js';
 import { createThumbnail } from './thumbnail.js';
+import { canCopyImage, copyImage, saveImage, flashButton } from './photo-actions.js';
+import { canShowMap, updateMap, PHOTO_COLOR, trackColor } from './map-view.js';
 import { buildOutputPlan, formatJstDateTime, formatJstRange } from './naming.js';
 import { buildWorkbookBlob, PHOTOS_DIR } from './excel-writer.js';
 import {
@@ -28,6 +30,7 @@ const state = {
   album: null,     // kmzFiles をまとめたもの(merge.js の buildAlbum の結果)。KMZ が無ければ null
   segments: [],    // 読み込んだ GPX の経路(merge.js の addSegments で重なりを除いたもの。読み込んだ順)
   track: null,     // segments をまとめたもの(merge.js の buildTrack の結果。表示だけに使う)
+  photoRows: [],   // 写真の一覧に出している写真(No. の a-1 … を付けたもの。地図にも使う)
   urls: [],        // プレビューで作った画像の URL(写真の一覧を作り直すときに解放する)
   busy: false      // 読み込み中・保存中
 };
@@ -262,17 +265,26 @@ function showKmzPreview() {
   $('outputSection').hidden = !album; // 保存するのは KMZ の内容なので、KMZ を読み込んでいるときだけ出す
   showResult('');
   updatePreviewSection();
-  if (!album) {
-    $('photoRows').replaceChildren();
-    return;
-  }
 
-  const plan = buildOutputPlan(album, Date.now());
-  $('sumFile').textContent = album.files.map((f) => f.fileName).join('\n');
-  $('sumTitle').textContent = album.titles.join('\n') || '(なし)';
-  $('sumCount').textContent = `${plan.photos.length} 枚`;
-  $('sumFolder').textContent = plan.folderName;
-  $('photoRows').replaceChildren(...plan.photos.map(photoRow));
+  state.photoRows = album ? labelPhotos(album, buildOutputPlan(album, Date.now())) : [];
+  if (album) {
+    $('sumFile').replaceChildren(...album.files.map((f, i) => fileLine(fileLetter(i), f.fileName, PHOTO_COLOR)));
+    $('sumCount').textContent = `${album.photos.length} 枚`;
+  }
+  $('photoRows').replaceChildren(...state.photoRows.map(photoRow));
+  showMap();
+}
+
+// 写真を KMZ ごと(a, b …)・撮影日時の順に並べ、No.(a-1, a-2 …)を label に付ける。
+// plan(buildOutputPlan の結果。保存するファイル名などを持つ)の photos は album.photos と同じ順で対応する
+function labelPhotos(album, plan) {
+  const groups = new Map(album.files.map((file, i) => [file, { letter: fileLetter(i), photos: [] }]));
+  const fileOf = new Map(album.files.flatMap((file) => file.photos.map((photo) => [photo, file])));
+  album.photos.forEach((photo, i) => {
+    const group = groups.get(fileOf.get(photo));
+    group.photos.push({ ...plan.photos[i], label: `${group.letter}-${group.photos.length + 1}` });
+  });
+  return [...groups.values()].flatMap((g) => g.photos);
 }
 
 // 右側(GPX)の表示を、読み込んだ経路(state.segments)から作り直す
@@ -284,21 +296,21 @@ function showGpxPreview() {
   $('gpxPreview').hidden = !track;
   $('btnClearGpx').hidden = !track;
   updatePreviewSection();
-  if (!track) {
-    $('segRows').replaceChildren();
-    return;
-  }
 
-  const hasTime = track.startMs !== null;
-  const routes = track.segments.length > 1 ? `(${track.segments.length} 経路)` : '';
-  $('gpxFile').textContent = track.files.join('\n');
-  $('gpxTitle').textContent = track.titles.join('\n') || '(なし)';
-  $('gpxPoints').textContent = `${countPoints(track.segments)} 点${routes}`;
-  $('gpxDistance').textContent = formatDistance(track.distanceM);
-  $('gpxTime').textContent = hasTime ? formatJstRange(track.startMs, track.endMs) : '(記録時刻なし)';
-  $('gpxDuration').textContent = hasTime ? formatDuration(track.endMs - track.startMs) : '(なし)';
-  $('segBlock').hidden = track.segments.length < 2;
-  $('segRows').replaceChildren(...track.segments.map(segmentRow));
+  if (track) {
+    const routes = track.segmentCount > 1 ? `(${track.segmentCount} 経路)` : '';
+    $('gpxFile').replaceChildren(
+      ...track.files.map((f, i) => fileLine(gpxLetter(i), f.source.fileName, trackColor(i)))
+    );
+    $('gpxPoints').textContent = `${track.pointCount.toLocaleString('ja-JP')} 点${routes}`;
+    $('gpxDistance').textContent = formatDistance(track.distanceM);
+  }
+  // 経路ごとの内訳: GPX ごとに、ファイル名の行と、その経路(A-1, A-2 …)の行を並べる
+  $('segRows').replaceChildren(...(track?.files ?? []).flatMap((f, i) => [
+    segmentGroupRow(gpxLetter(i), f.source.fileName, trackColor(i)),
+    ...f.segments.map((segment, j) => segmentRow(segment, `${gpxLetter(i)}-${j + 1}`))
+  ]));
+  showMap();
 }
 
 // KMZ・GPX のどちらかを読み込んでいるときだけ「内容を確かめる」を出す
@@ -306,38 +318,107 @@ function updatePreviewSection() {
   $('previewSection').hidden = !state.album && !state.track;
 }
 
+// KMZ の記号: a, b, … z, aa, ab …(GPX は大文字: gpxLetter)
+function fileLetter(index) {
+  let letters = '';
+  for (let n = index + 1; n > 0; n = Math.floor((n - 1) / 26)) {
+    letters = String.fromCharCode(97 + ((n - 1) % 26)) + letters;
+  }
+  return letters;
+}
+
+const gpxLetter = (index) => fileLetter(index).toUpperCase();
+
+// ファイル名の行(左に a, b … / A, B … の記号。記号の色は地図のマーカーの色)
+function fileLine(letter, name, color) {
+  const div = document.createElement('div');
+  div.className = 'file-line';
+  div.append(fileBadge(letter, color), name);
+  return div;
+}
+
+function fileBadge(letter, color) {
+  const badge = document.createElement('span');
+  badge.className = 'file-badge';
+  badge.style.backgroundColor = color;
+  badge.textContent = letter;
+  return badge;
+}
+
 // 8.4 km(minoh-hiking の統計表と同じく小数点以下1位)
 function formatDistance(meters) {
   return `${(meters / 1000).toFixed(1)} km`;
 }
 
-// 2時間13分 / 45分
-function formatDuration(ms) {
-  const minutes = Math.round(ms / 60000);
-  const h = Math.floor(minutes / 60);
-  const m = minutes % 60;
-  return h > 0 ? `${h}時間${m}分` : `${m}分`;
+// 経路ごとの内訳の、GPX のファイル名の行
+function segmentGroupRow(letter, name, color) {
+  const tr = document.createElement('tr');
+  tr.className = 'group-row';
+  const th = document.createElement('th');
+  th.colSpan = 4;
+  th.append(fileBadge(letter, color), name);
+  tr.append(th);
+  return tr;
 }
 
-// 経路ごとの内訳の1行。記録の日時の下に、どの GPX の経路かを小さく出す
-function segmentRow(segment, i) {
+// 経路ごとの内訳の、経路の行(No. は A-1 など)
+function segmentRow(segment, label) {
   const tr = document.createElement('tr');
   const hasTime = segment.startMs !== null;
-  const timeCell = cell('', 'col-time');
-  const timeLine = document.createElement('div');
-  timeLine.textContent = hasTime ? formatJstRange(segment.startMs, segment.endMs) : '(記録時刻なし)';
-  if (!hasTime) timeLine.classList.add('is-empty');
-  const fileLine = document.createElement('div');
-  fileLine.className = 'seg-file';
-  fileLine.textContent = segment.fileName;
-  timeCell.append(timeLine, fileLine);
+  const timeCell = cell(hasTime ? formatJstRange(segment.startMs, segment.endMs) : '(記録時刻なし)', 'col-time');
+  if (!hasTime) timeCell.classList.add('is-empty');
   tr.append(
-    cell(String(i + 1), 'col-no'),
+    cell(label, 'col-no'),
     timeCell,
     cell(`${segment.points.length.toLocaleString('ja-JP')} 点`, 'col-num'),
     cell(formatDistance(segment.distanceM), 'col-num')
   );
   return tr;
+}
+
+// ===== 地図 =====
+// 写真の撮影場所と、移動経路の記録地点をすべてマーカーで出す(KMZ・GPX のどちらかがあるときだけ)。
+// 「内容を確かめる」が表示されてから呼ぶこと(隠れていると地図の大きさを測れない)
+function showMap() {
+  const hasData = state.photoRows.length > 0 || !!state.track;
+  $('mapBlock').hidden = !hasData;
+  if (!hasData) return;
+  if (!canShowMap()) {
+    $('map').hidden = true;
+    $('mapLegend').hidden = true;
+    $('mapError').hidden = false;
+    return;
+  }
+
+  const files = state.track?.files ?? [];
+  updateMap($('map'), {
+    photos: state.photoRows.map((p) => ({ lat: p.lat, lng: p.lng, label: p.label, name: p.displayName })),
+    tracks: files.flatMap((f, i) => f.segments.map((segment, j) => ({
+      label: `${gpxLetter(i)}-${j + 1}`,
+      colorIndex: i,
+      points: segment.points.map((p) => ({
+        lat: p.lat,
+        lng: p.lng,
+        timeLabel: p.timeMs !== null ? formatJstDateTime(p.timeMs) : ''
+      }))
+    })))
+  });
+
+  // 凡例: 写真の撮影場所と、GPX(A, B …)ごとの記録地点の色
+  const legend = [];
+  if (state.photoRows.length > 0) legend.push(legendItem(PHOTO_COLOR, `写真の撮影場所(${state.photoRows.length} 枚)`, 'is-photo'));
+  files.forEach((f, i) => legend.push(legendItem(trackColor(i), `${gpxLetter(i)} の記録地点`)));
+  $('mapLegend').replaceChildren(...legend);
+}
+
+function legendItem(color, text, className = '') {
+  const span = document.createElement('span');
+  span.className = `legend-item ${className}`.trim();
+  const dot = document.createElement('span');
+  dot.className = 'legend-dot';
+  dot.style.backgroundColor = color;
+  span.append(dot, text);
+  return span;
 }
 
 function objectUrl(blob) {
@@ -353,7 +434,8 @@ function cell(text, className) {
   return td;
 }
 
-// 写真の一覧の1行: 1列目に No.・名称・撮影日時・緯度, 経度を1行ずつ、2列目に写真
+// 写真の一覧の1行: 1列目に No.(a-1 など)・名称・撮影日時・緯度, 経度を1行ずつ、2列目に写真、
+// 3列目にボタン(拡大表示・縮小版をコピー・画像をコピー・画像を保存)
 function photoRow(photo) {
   const tr = document.createElement('tr');
 
@@ -365,7 +447,7 @@ function photoRow(photo) {
     infoCell.append(div);
     return div;
   };
-  line(`No.${photo.no}`, 'info-no');
+  line(`No.${photo.label}`, 'info-no');
   const nameLine = line(photo.displayName, 'info-name');
   if (!photo.name) nameLine.classList.add('is-fallback');
   nameLine.title = `保存するファイル名: ${photo.fileName}`;
@@ -396,8 +478,52 @@ function photoRow(photo) {
     thumbCell.append(span);
   }
 
-  tr.append(infoCell, thumbCell);
+  // 表示できない形式(縮小版を作れなかった写真)は、拡大表示・コピーができない(保存はできる)
+  const notViewable = photo.thumb ? '' : 'この形式は表示できません';
+  const noCopy = canCopyImage
+    ? notViewable
+    : 'このブラウザでは画像をコピーできません(Chrome・Edge などで使えます)';
+  const actions = document.createElement('div');
+  actions.className = 'photo-actions';
+  actions.append(
+    actionButton(photo, '拡大表示', '元の写真を大きく表示します', notViewable, () => openPhoto(photo)),
+    actionButton(photo, '縮小版をコピー', '縮小版(長辺 約400px)の画像をコピーします。そのまま貼り付けて使えます',
+      noCopy, (button) => onCopyImage(button, photo.thumb.blob)),
+    actionButton(photo, '画像をコピー', '元の大きさの画像をコピーします。そのまま貼り付けて使えます',
+      noCopy, (button) => onCopyImage(button, photo.blob)),
+    actionButton(photo, '画像を保存', `元の写真を「${photo.fileName}」としてダウンロードします`,
+      '', () => saveImage(photo))
+  );
+  const actionsCell = cell('', 'col-actions');
+  actionsCell.append(actions);
+
+  tr.append(infoCell, thumbCell, actionsCell);
   return tr;
+}
+
+// 写真の一覧のボタン。disabledReason があれば押せなくし、理由をツールチップに出す
+function actionButton(photo, label, title, disabledReason, onClick) {
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'btn btn-mini';
+  button.textContent = label;
+  button.title = disabledReason || title;
+  button.disabled = !!disabledReason;
+  button.setAttribute('aria-label', `${label}: No.${photo.label} ${photo.displayName}`);
+  button.addEventListener('click', () => onClick(button));
+  return button;
+}
+
+// 画像をクリップボードにコピーし、結果をボタンの文字で知らせる。
+// 押した操作の中でコピーを始める必要があるため、copyImage は待たずにすぐ呼ぶ
+async function onCopyImage(button, blob) {
+  try {
+    await copyImage(blob);
+    flashButton(button, 'コピーしました');
+  } catch (err) {
+    console.error(err);
+    flashButton(button, 'コピー失敗', 2500);
+  }
 }
 
 // 元の写真を大きく表示する
@@ -406,7 +532,7 @@ function openPhoto(photo) {
   $('dialogImage').src = photo.fullUrl;
   $('dialogImage').alt = photo.displayName;
   const time = Number.isFinite(photo.timeMs) ? `  ${formatJstDateTime(photo.timeMs)}` : '';
-  $('dialogCaption').textContent = `No.${photo.no}  ${photo.displayName}${time}`;
+  $('dialogCaption').textContent = `No.${photo.label}  ${photo.displayName}${time}`;
   $('photoDialog').showModal();
 }
 
