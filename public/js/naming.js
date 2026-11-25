@@ -1,8 +1,8 @@
 // フォルダ名・ファイル名の作成と、Windows で使えない文字の除去
 // 日時はすべて日本時間で扱う。端末のタイムゾーン設定に左右されないよう、
 // 9時間ずらした時刻を UTC として読み出す(getUTC〜)。
-// 名前の最大文字数・写真のフォルダ名は constants.js に置く。
-import { MAX_NAME_LENGTH, MAX_SOURCE_NAME_LENGTH, PHOTOS_DIR } from './constants.js';
+// 名前の最大文字数は constants.js に置く。
+import { MAX_NAME_LENGTH } from './constants.js';
 
 export const JST_OFFSET_MS = 9 * 60 * 60 * 1000;
 
@@ -170,51 +170,21 @@ export function saveNameCandidates(album, track, nowMs) {
   return [...new Set(names.map((n) => sanitizeName(n)).filter(Boolean))];
 }
 
-// 一緒に保存する元のファイルの名前: 元のファイル名から使えない文字だけ除く。
-// 拡張子(ext)で終わらなければ付ける(中身で KMZ・GPX と分かったファイルも、その形式として開けるように)
-function sourceFileName(fileName, ext, fallback) {
-  const suffix = `.${ext}`;
-  const hasExt = fileName.toLowerCase().endsWith(suffix);
-  const base = sanitizeName(hasExt ? fileName.slice(0, -suffix.length) : fileName, MAX_SOURCE_NAME_LENGTH);
-  return `${base || fallback}${hasExt ? fileName.slice(-suffix.length) : suffix}`;
-}
-
-// 同じ名前が重なったら「名前 (2).kmz」のように番号を付ける(Windows に合わせて大文字・小文字は区別しない)。
-// reserved は、ほかに使っている名前(写真のフォルダ名など)
-function uniqueFileNames(names, reserved = []) {
-  const used = new Set(reserved.map((n) => n.toLowerCase()));
-  return names.map((name) => {
-    const base = baseNameOf(name);
-    const ext = name.slice(base.length);
-    let result = name;
-    for (let n = 2; used.has(result.toLowerCase()); n++) result = `${base} (${n})${ext}`;
-    used.add(result.toLowerCase());
-    return result;
-  });
-}
-
 // 保存の計画: 出力フォルダ(名前 name)の中に置くものの名前を決める。
-//   { folderName, xlsxFileName, photos, kmz: [{ file, fileName }], gpx: [{ file, fileName }] }
-// - includeKmz が true なら、KMZ から作るもの全部(Excel(<名前>.xlsx)・写真(photos フォルダ)・元の KMZ)を保存する。
-//   false か KMZ が無ければ、どれも無し(xlsxFileName は null、ほかは [])
-// - includeGpx が true なら、元の GPX を保存する
-// - 元の KMZ・GPX は、画面のファイルの一覧に出ているものを、元のファイルのまま出力フォルダの直下に置く。
-//   file は readKmz・readGpx の結果(kmzBytes・bytes を持つ)
-// - 直下のファイル名が重なれば番号を付ける(Excel の名前を優先して残す)
+//   { folderName, xlsxFileName, photos, kmz: { fileName, count } | null, gpx: { fileName, count } | null }
+// - includeKmz が true なら、KMZ から作るもの全部(Excel(<名前>.xlsx)・写真(photos フォルダ)・KMZ(<名前>.kmz))を
+//   保存する。false か KMZ が無ければ、どれも無し(xlsxFileName・kmz は null、photos は [])
+// - includeGpx が true なら、GPX(<名前>.gpx)を保存する
+// - count は読み込んだ KMZ・GPX の数(画面のファイルの一覧に出ているもの)。1つなら元のファイルのまま、
+//   2つ以上なら1つにまとめて保存する(merge-writer.js)
 export function buildSavePlan({ album, track, name, includeKmz, includeGpx }) {
   const useKmz = !!album && includeKmz;
-  const kmzFiles = useKmz ? album.files : [];
-  const gpxFiles = track && includeGpx ? track.files.map((f) => f.source) : [];
-  const names = uniqueFileNames([
-    ...(useKmz ? [`${name}.xlsx`] : []),
-    ...kmzFiles.map((f) => sourceFileName(f.fileName, 'kmz', 'original')),
-    ...gpxFiles.map((f) => sourceFileName(f.fileName, 'gpx', 'track'))
-  ], useKmz ? [PHOTOS_DIR] : []);
+  const useGpx = !!track && includeGpx;
   return {
     folderName: name,
-    xlsxFileName: useKmz ? names.shift() : null,
+    xlsxFileName: useKmz ? `${name}.xlsx` : null,
     photos: useKmz ? planPhotos(album) : [],
-    kmz: kmzFiles.map((file) => ({ file, fileName: names.shift() })),
-    gpx: gpxFiles.map((file) => ({ file, fileName: names.shift() }))
+    kmz: useKmz ? { fileName: `${name}.kmz`, count: album.files.length } : null,
+    gpx: useGpx ? { fileName: `${name}.gpx`, count: track.files.length } : null
   };
 }

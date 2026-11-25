@@ -55,9 +55,12 @@ function resolvePath(baseDir, src) {
 }
 
 // KMZ ファイル(File)を読み込み、KMZ の情報を返す。
-//   { fileName, kmzBytes, title, photos: [{ name, timeMs, lat, lng, bytes, ext, type, srcPath, kmlIndex }] }
+//   { fileName, kmzBytes, title, photos: [{ name, timeMs, lat, lng, bytes, ext, type, srcPath, kmlIndex, placemark }] }
 // photos は KML の順(出力順への並べ替えは、複数の KMZ をまとめるときに merge.js の buildAlbum で行う)。
-// kmzBytes は KMZ そのもののバイト列(読み込んだ後に元のファイルを移動・削除しても保存できるよう持っておく)。
+// 「保存する」のために、次も持っておく(読み込んだ後に元のファイルを移動・削除しても保存できるように):
+// - kmzBytes: KMZ そのもののバイト列(KMZ が1つなら、元のファイルのまま保存する)
+// - placemark: 写真ごとの元の <Placemark>(KMZ が2つ以上のとき、1つにまとめるのに使う。読み取っていない情報も
+//   落とさないよう、要素をそのまま書き写す: merge-writer.js)
 export async function readKmz(file) {
   const JSZip = globalThis.JSZip;
   const kmzBytes = new Uint8Array(await file.arrayBuffer());
@@ -127,7 +130,8 @@ export async function readKmz(file) {
       ext: format.ext,
       type: format.type,
       srcPath: entry.name,
-      kmlIndex: photos.length
+      kmlIndex: photos.length,
+      placemark: pm
     });
   }
 

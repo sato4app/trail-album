@@ -9,7 +9,15 @@ import { readGpx, GpxError } from './gpx-reader.js';
 import { excludeLoadedPhotos, buildAlbum, addSegments, buildTrack } from './merge.js';
 import { createThumbnail } from './thumbnail.js';
 import { canCopyImage, copyImage, saveImage, flashButton } from './photo-actions.js';
-import { canShowMap, updateMap, trackColor } from './map-view.js';
+import { canShowMap, updateMap, renderLegend, openPhotoPopup, trackColor } from './map-view.js';
+import {
+  MAP_WINDOW_PAGE,
+  MAP_WINDOW_NAME,
+  connectMapWindow,
+  openMapWindow,
+  sendToMapWindow,
+  selectInMapWindow
+} from './map-window.js';
 import { setupColSplitter } from './col-splitter.js';
 import {
   planPhotos,
@@ -22,6 +30,7 @@ import {
   formatJstRange
 } from './naming.js';
 import { buildWorkbookBlob } from './excel-writer.js';
+import { buildMergedKmz, buildMergedGpx } from './merge-writer.js';
 import { PHOTO_COLOR, PHOTOS_DIR, MAX_NAME_LENGTH } from './constants.js';
 import {
   canSaveToFolder,
@@ -48,8 +57,8 @@ const state = {
   save: {
     defaultName: '',  // 名前の既定値(読み込んだ内容から作る: naming.js の defaultSaveName)
     edited: false,    // 利用者が名前を既定値から変えたか(変えたら、KMZ・GPX を追加しても名前を書き換えない)
-    includeKmz: true, // KMZ から作るもの(Excel・写真・元の KMZ)を保存するか(読み込んでいない間も、選んだ状態を覚えておく)
-    includeGpx: true  // 元の GPX を保存するか
+    includeKmz: true, // KMZ から作るもの(Excel・写真・KMZ)を保存するか(読み込んでいない間も、選んだ状態を覚えておく)
+    includeGpx: true  // GPX を保存するか
   }
 };
 
@@ -80,6 +89,7 @@ function init() {
   });
   setupDragAndDrop();
   setupColSplitter($('previewCols'), $('colSplitter'), $('kmzCol'));
+  connectMapWindow({ onSelect: (no) => selectPhoto(no, 'window') }); // 別ウインドウの地図でマーカーを押した
   $('btnClearKmz').addEventListener('click', onClearKmz);
   $('btnClearGpx').addEventListener('click', onClearGpx);
 
@@ -397,13 +407,17 @@ function segmentRow(segment, label) {
 // ===== 地図 =====
 // 写真の撮影場所と、移動経路の記録地点をすべてマーカーで出す(KMZ・GPX のどちらかがあるときだけ)。
 // fit が false なら、地図の中心・縮尺は今のままにする(KMZ・GPX をクリアしたとき)。
-// 「内容を確かめる」が表示されてから呼ぶこと(隠れていると地図の大きさを測れない)
+// 「内容を確かめる」が表示されてから呼ぶこと(隠れていると地図の大きさを測れない)。
+// 地図を別ウインドウで開いていれば、そちらにも同じ内容を出す(map-window.js)
 function showMap({ fit = true } = {}) {
   const hasData = state.photoRows.length > 0 || !!state.track;
   $('mapBlock').hidden = !hasData;
   // 地図を出している間は、画面の幅いっぱいに広げる(広がった分は GPX・地図の列に回る: style.css)
   document.body.classList.toggle('is-wide', hasData && canShowMap());
-  if (!hasData) return;
+  if (!hasData) {
+    sendToMapWindow(null); // 別ウインドウには、表示する地点が無いことを出す
+    return;
+  }
   if (!canShowMap()) {
     $('map').hidden = true;
     $('mapLegend').hidden = true;
@@ -414,33 +428,35 @@ function showMap({ fit = true } = {}) {
   const files = state.track?.files ?? [];
   // マーカーに出す日時は、KMZ・GPX に記録された日時(日本時間。秒まで)
   const timeLabel = (ms) => (Number.isFinite(ms) ? formatJstDateTimeSeconds(ms) : '');
-  updateMap($('map'), {
+  // 写真は、マーカーを押したときに出す縮小版(thumb)と、別ウインドウで元の写真を大きく表示するための元の写真(blob)も渡す
+  const view = {
     photos: state.photoRows.map((p) => ({
-      lat: p.lat, lng: p.lng, no: p.no, name: p.displayName, timeLabel: timeLabel(p.timeMs)
+      lat: p.lat, lng: p.lng, no: p.no, name: p.displayName, timeLabel: timeLabel(p.timeMs),
+      thumb: p.thumb ? { blob: p.thumb.blob, width: p.thumb.width, height: p.thumb.height } : null,
+      blob: p.blob
     })),
     tracks: files.flatMap((f, i) => f.segments.map((segment, j) => ({
       label: segmentNo(i, j),
       colorIndex: i,
       points: segment.points.map((p) => ({ lat: p.lat, lng: p.lng, timeLabel: timeLabel(p.timeMs) }))
-    })))
-  }, { fit });
-
-  // 凡例: 写真の撮影場所と、GPX(1, 2 …)ごとの記録地点の色
-  const legend = [];
-  if (state.photoRows.length > 0) legend.push(legendItem(PHOTO_COLOR, `写真の撮影場所(${state.photoRows.length} 枚)`, 'is-photo'));
-  files.forEach((f, i) => legend.push(legendItem(trackColor(i), `GPX ${fileNo(i)} の移動経路・記録地点`, 'is-track')));
-  $('mapLegend').replaceChildren(...legend);
-}
-
-function legendItem(color, text, className = '') {
-  const span = document.createElement('span');
-  span.className = `legend-item ${className}`.trim();
-  const dot = document.createElement('span');
-  dot.className = 'legend-dot';
-  dot.style.backgroundColor = color;
-  dot.style.color = color; // 経路の線(style.css の .is-track)の色
-  span.append(dot, text);
-  return span;
+    }))),
+    // 凡例: 写真の撮影場所と、GPX(1, 2 …)ごとの記録地点の色
+    legend: [
+      ...(state.photoRows.length > 0
+        ? [{ color: PHOTO_COLOR, text: `写真の撮影場所(${state.photoRows.length} 枚)`, kind: 'photo' }]
+        : []),
+      ...files.map((f, i) => ({ color: trackColor(i), text: `GPX ${fileNo(i)} の移動経路・記録地点`, kind: 'track' }))
+    ]
+  };
+  // 地図の写真のマーカーを押したら、写真の一覧のその行に枠を付ける。出した縮小版を押したら、
+  // 写真の一覧の「拡大表示」と同じく、元の写真を大きく表示する
+  const selectOnMap = (p) => selectPhoto(p.no, 'map');
+  const openPhotoOnMap = (p) => openPhoto(state.photoRows.find((row) => row.no === p.no));
+  // 地図の右上に「別ウインドウで開く」を出す
+  const windowLink = { href: MAP_WINDOW_PAGE, target: MAP_WINDOW_NAME, open: openMapWindow };
+  updateMap($('map'), view, { fit, selectPhoto: selectOnMap, openPhoto: openPhotoOnMap, windowLink });
+  renderLegend($('mapLegend'), view.legend);
+  sendToMapWindow(view, { fit });
 }
 
 function objectUrl(blob) {
@@ -456,10 +472,11 @@ function cell(text, className) {
   return td;
 }
 
-// 写真の一覧の1行: 1列目に No.(保存の通し番号)・名称・撮影日時・緯度, 経度を1行ずつ、2列目に写真、
-// 3列目にボタン(拡大表示・写真をコピー・写真を保存)
+// 写真の一覧の1行: 1列目に No.(保存の通し番号)・名称・撮影日時・緯度, 経度を1行ずつ、
+// 2列目に写真(押すと、地図でその写真の場所に縮小版を出す: selectPhoto)、3列目にボタン(拡大表示・写真をコピー・写真を保存)
 function photoRow(photo) {
   const tr = document.createElement('tr');
+  tr.dataset.no = String(photo.no);
 
   const infoCell = cell('', 'col-info');
   const line = (text, className) => {
@@ -483,15 +500,15 @@ function photoRow(photo) {
     const button = document.createElement('button');
     button.type = 'button';
     button.className = 'thumb-button';
-    button.title = '元の写真を大きく表示';
-    button.setAttribute('aria-label', `${photo.displayName} を大きく表示`);
+    button.title = '地図で、この写真の場所を表示';
+    button.setAttribute('aria-label', `${photo.displayName} の場所を地図で表示`);
     const img = document.createElement('img');
     img.src = objectUrl(photo.thumb.blob);
     img.alt = '';
     img.width = photo.thumb.width;
     img.height = photo.thumb.height;
     button.append(img);
-    button.addEventListener('click', () => openPhoto(photo));
+    button.addEventListener('click', () => selectPhoto(photo.no, 'list'));
     thumbCell.append(button);
   } else {
     const span = document.createElement('span');
@@ -554,6 +571,24 @@ function openPhoto(photo) {
   const time = Number.isFinite(photo.timeMs) ? `  ${formatJstDateTime(photo.timeMs)}` : '';
   $('dialogCaption').textContent = `No.${photo.no}  ${photo.displayName}${time}`;
   $('photoDialog').showModal();
+}
+
+// ===== 写真を選ぶ(写真の一覧と地図を結ぶ) =====
+// 写真の一覧のその写真(通し番号 no)の行に枠を付け(ほかの行の枠は外す)、地図(画面と、開いていれば別ウインドウ)に
+// その写真の縮小版の吹き出しを出す。枠は、ほかの写真を選ぶか、KMZ を読み込み直す・クリアするまで残す
+// (吹き出しを閉じても残す)。from はどこで選んだか:
+//   'list'   … 写真の一覧の写真を押した。画面の地図が見えるようにスクロールする
+//   'map'    … 画面の地図のマーカーを押した。スクロールはしない(地図が見えなくならないように)
+//   'window' … 別ウインドウの地図のマーカーを押した。スクロールはしない
+function selectPhoto(no, from) {
+  for (const tr of $('photoRows').rows) tr.classList.toggle('is-selected', Number(tr.dataset.no) === no);
+  if (from === 'list' && !$('mapBlock').hidden && canShowMap()) {
+    const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    $('map').scrollIntoView({ block: 'nearest', behavior: reduceMotion ? 'auto' : 'smooth' });
+  }
+  // マーカーを押した地図には、もう吹き出しが出ている(出ていれば、そのままにする)
+  openPhotoPopup(no);
+  selectInMapWindow(no);
 }
 
 // ===== 保存 =====
@@ -654,7 +689,7 @@ function renderSavePreview() {
     button.setAttribute('aria-pressed', String(button.dataset.name === input.value));
   }
 
-  // 保存するもの: KMZ(Excel・写真・元の KMZ)と GPX(元の GPX)。読み込んでいない種類は押せなくし、チェックも外して見せる
+  // 保存するもの: KMZ(Excel・写真・KMZ)と GPX。読み込んでいない種類は押せなくし、チェックも外して見せる
   setIncludeCheck('includeKmz', album ? album.files.length : 0, state.save.includeKmz, busy);
   setIncludeCheck('includeGpx', track ? track.files.length : 0, state.save.includeGpx, busy);
 
@@ -673,8 +708,12 @@ function renderSavePreview() {
     contents.push(treeItem(PHOTOS_DIR, `写真 ${plan.photos.length} 枚(元の画質のまま)`, 'folder'));
   }
   $('savePhotos').hidden = plan.photos.length === 0; // 写真を保存しないときは、写真のファイル名の一覧も出さない
-  contents.push(...plan.kmz.map((k) => treeItem(k.fileName, '読み込んだ KMZ', 'file')));
-  contents.push(...plan.gpx.map((g) => treeItem(g.fileName, '読み込んだ GPX', 'file')));
+  // KMZ・GPX は、1つなら元のファイルのまま、2つ以上なら1つにまとめたもの
+  const sourceNote = (kind, count) => (count === 1
+    ? `読み込んだ ${kind}(元のファイルのまま)`
+    : `読み込んだ ${kind} ${count} ファイルを1つにまとめたもの`);
+  if (plan.kmz) contents.push(treeItem(plan.kmz.fileName, sourceNote('KMZ', plan.kmz.count), 'file', [], noName));
+  if (plan.gpx) contents.push(treeItem(plan.gpx.fileName, sourceNote('GPX', plan.gpx.count), 'file', [], noName));
   const zipName = `${plan.folderName}.zip`;
   if (canSaveToFolder) {
     const dir = currentSaveDir();
@@ -827,15 +866,16 @@ function prepareOutput() {
     includeKmz: state.save.includeKmz,
     includeGpx: state.save.includeGpx
   });
-  if (!plan.xlsxFileName && plan.kmz.length === 0 && plan.gpx.length === 0) return null;
-  return { album: state.album, nowMs: Date.now(), plan };
+  if (!plan.xlsxFileName && !plan.kmz && !plan.gpx) return null;
+  return { album: state.album, track: state.track, nowMs: Date.now(), plan };
 }
 
-// 保存の共通処理: Excel を作り(KMZ を保存するとき)、保存する内容(entries)をそろえて save に渡す。
-// save(entries, onFileDone) は完了メッセージを返す。進み具合は、保存したファイルの数で出す
+// 保存の共通処理: Excel を作り(KMZ を保存するとき)、KMZ・GPX をそろえ(2つ以上なら1つにまとめる)、
+// 保存する内容(entries)を save に渡す。save(entries, onFileDone) は完了メッセージを返す。
+// 進み具合は、保存したファイルの数で出す
 async function runOutput(output, save, label) {
   setBusy(true);
-  const { album, nowMs, plan } = output;
+  const { album, track, nowMs, plan } = output;
   try {
     const entries = [];
     if (plan.xlsxFileName) {
@@ -843,8 +883,18 @@ async function runOutput(output, save, label) {
       entries.push({ path: plan.xlsxFileName, data: await buildWorkbookBlob(album, plan, nowMs) });
       entries.push(...plan.photos.map((p) => ({ path: `${PHOTOS_DIR}/${p.fileName}`, data: p.bytes })));
     }
-    entries.push(...plan.kmz.map((k) => ({ path: k.fileName, data: k.file.kmzBytes })));
-    entries.push(...plan.gpx.map((g) => ({ path: g.fileName, data: g.file.bytes })));
+    if (plan.kmz) {
+      let data = album.files[0].kmzBytes;
+      if (plan.kmz.count > 1) {
+        showProgress('KMZ をまとめています…');
+        data = await buildMergedKmz(plan.photos, plan.folderName);
+      }
+      entries.push({ path: plan.kmz.fileName, data });
+    }
+    if (plan.gpx) {
+      const data = plan.gpx.count > 1 ? buildMergedGpx(track, plan.folderName) : track.files[0].source.bytes;
+      entries.push({ path: plan.gpx.fileName, data });
+    }
 
     const total = entries.length;
     let done = 0;

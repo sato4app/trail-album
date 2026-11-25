@@ -28,10 +28,14 @@ function distanceBetween(a, b) {
 }
 
 // GPX ファイル(File)を読み込み、移動経路の情報を返す。
-//   { fileName, bytes, segments: [{ points: [{ lat, lng, timeMs }], distanceM, startMs, endMs }] }
+//   { fileName, bytes, namespace, version, waypoints,
+//     segments: [{ points: [{ lat, lng, timeMs }], distanceM, startMs, endMs, xmlNode, xmlPointNodes }] }
 // segments は GPX の順。startMs・endMs は記録時刻の最初と最後(記録時刻が1つも無ければ null)。
-// bytes は GPX そのもののバイト列(「保存する」で元のファイルのまま保存する。読み込んだ後に元のファイルを
-// 移動・削除しても保存できるよう持っておく)。
+// 「保存する」のために、次も持っておく(読み込んだ後に元のファイルを移動・削除しても保存できるように):
+// - bytes: GPX そのもののバイト列(GPX が1つなら、元のファイルのまま保存する)
+// - namespace・version・waypoints(直下の <wpt>)・経路ごとの xmlNode(元の <trkseg>。trkseg を持たない GPX では null で、
+//   xmlPointNodes に <trkpt> の並び): GPX が2つ以上のとき、1つにまとめるのに使う。標高などの読み取っていない情報も
+//   落とさないよう、要素をそのまま書き写す(merge-writer.js)
 // 複数の GPX をまとめた合計(記録地点数・移動距離など)は merge.js の buildTrack で求める。
 export async function readGpx(file) {
   const bytes = new Uint8Array(await file.arrayBuffer());
@@ -40,21 +44,26 @@ export async function readGpx(file) {
     throw new GpxError('GPX として読み込めませんでした。ファイルが壊れているか、GPX ではない可能性があります。');
   }
 
-  let pointLists = allDescendants(doc, 'trkseg')
-    .map((seg) => readPoints(allDescendants(seg, 'trkpt')))
-    .filter((points) => points.length > 0);
-  if (pointLists.length === 0) {
-    const all = readPoints(allDescendants(doc, 'trkpt'));
-    if (all.length > 0) pointLists = [all];
+  let lists = allDescendants(doc, 'trkseg')
+    .map((seg) => ({ xmlNode: seg, xmlPointNodes: null, points: readPoints(allDescendants(seg, 'trkpt')) }))
+    .filter((list) => list.points.length > 0);
+  if (lists.length === 0) {
+    const nodes = allDescendants(doc, 'trkpt');
+    const all = readPoints(nodes);
+    if (all.length > 0) lists = [{ xmlNode: null, xmlPointNodes: nodes, points: all }];
   }
-  if (pointLists.length === 0) {
+  if (lists.length === 0) {
     throw new GpxError('GPX の中に移動経路の記録地点(trkpt)が見つかりませんでした。');
   }
 
+  const root = doc.documentElement;
   return {
     fileName: file.name,
     bytes,
-    segments: pointLists.map(summarize)
+    namespace: root.namespaceURI,
+    version: root.getAttribute('version'),
+    waypoints: Array.from(root.children).filter((el) => el.localName === 'wpt'),
+    segments: lists.map(({ points, ...xml }) => ({ ...summarize(points), ...xml }))
   };
 }
 

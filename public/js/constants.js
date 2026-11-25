@@ -43,6 +43,14 @@ export const TRACK_POINT_RADIUS = 3;  // 記録地点の円の半径
 export const TRACK_LINE_WEIGHT = 3;   // 経路の線の太さ
 export const TRACK_LINE_OPACITY = 0.6; // 経路の線の不透明度(0〜1)
 
+// 写真の撮影場所のマーカーを押したときに出す、写真の縮小版の大きさ(長辺の px。縮小版より大きくはしない)
+export const PHOTO_POPUP_THUMB_SIZE = 240;
+
+// 地図の右上の「別ウインドウで開く」で開くウインドウの大きさ(px。画面より大きければ画面に合わせる)。
+// 開いた後は、利用者がウインドウの大きさを変えられる(地図も付いてくる)
+export const MAP_WINDOW_WIDTH = 1200;
+export const MAP_WINDOW_HEIGHT = 900;
+
 // ===== KMZ と GPX の列(col-splitter.js が style.css に渡す) =====
 
 // KMZ の列の既定の幅(px)。画面の幅が狭いときは、左右半分ずつにする
@@ -68,8 +76,6 @@ export const PHOTOS_DIR = 'photos';
 // 写真のファイル名の名称部分と、保存の「名前」(出力フォルダ名・Excel・ZIP の名前)の最大文字数
 // (長すぎるとパス全体が Windows の上限に近づくため)
 export const MAX_NAME_LENGTH = 40;
-// 一緒に保存する元の KMZ・GPX のファイル名の最大文字数(拡張子を除く)
-export const MAX_SOURCE_NAME_LENGTH = 120;
 
 // ===== Excel(excel-writer.js) =====
 

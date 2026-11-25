@@ -601,6 +601,16 @@ body.is-resizing {
   font-weight: 400;
 }
 
+/* 選んだ写真(地図のマーカーを押した・一覧の写真を押した)の行の枠(app.js の selectPhoto) */
+.photo-table tr.is-selected {
+  outline: 3px solid var(--accent);
+  outline-offset: -3px;
+}
+
+.photo-table tr.is-selected > td {
+  background: var(--accent-soft);
+}
+
 /* 写真の大きさは、右の3つのボタンを縦に並べた高さ(ボタンの高さ × 3 + 間 × 2)に合わせる */
 .photo-table {
   --mini-btn-height: 26px;
@@ -634,13 +644,14 @@ body.is-resizing {
   white-space: nowrap;
 }
 
+/* 写真の一覧の写真(押すと、地図でその写真の場所に縮小版を出す: app.js の selectPhoto) */
 .thumb-button {
   display: block;
   padding: 0;
   border: none;
   border-radius: 6px;
   background: none;
-  cursor: zoom-in;
+  cursor: pointer;
   line-height: 0;
 }
 
@@ -674,12 +685,40 @@ body.is-resizing {
 
 /* 地図(地理院地図)。列の幅いっぱいの正方形にする(ウインドウの幅を変えたり、KMZ と GPX の境界線を
    動かしたりすると、大きさが付いてくる。地図の描き直しは map-view.js)。
+   左右に並べる画面では、ウインドウの高さに収まるよう高さを抑える(そのときは横長になる: 下の .map-block)。
    Leaflet の重なり順を地図の中だけに閉じ込める */
 .map {
   aspect-ratio: 1 / 1;
   border: 1px solid var(--border);
   border-radius: 8px;
   isolation: isolate;
+}
+
+/* 左右に並べる画面では、地図(小見出し・凡例ごと)を画面に固定する。ページを下へスクロールすると、
+   GPX の内訳は流れていき、地図は画面の上端で止まる(写真の一覧をスクロールしながら、地図を見られる)。
+   写真の一覧の終わりまで来たら、地図も一緒に流れる(右の列は、左の列と同じ高さまで伸びるため)。
+   止まったときに下が切れないよう、地図の高さはウインドウの高さから小見出し・凡例・下の余白を除いた分までにする
+   (ただし --map-min-height より低くはしない)。上下に並べる狭い画面では固定しない */
+@media (min-width: 721px) {
+  .map-block {
+    --map-sticky-gap: 12px;     /* 止まったときの、地図の下とウインドウの下端との間 */
+    --map-min-height: 240px;    /* ウインドウの高さが低くても、地図をこれより低くはしない */
+    position: sticky;
+    top: 0; /* 上の余白は、小見出しの上の余白(.sub-title)で取る */
+    display: flex;
+    flex-direction: column;
+    max-height: calc(100vh - var(--map-sticky-gap));
+    max-height: calc(100dvh - var(--map-sticky-gap));
+  }
+
+  .map-block > * {
+    flex-shrink: 0;
+  }
+
+  .map-block > .map {
+    flex-shrink: 1;
+    min-height: var(--map-min-height);
+  }
 }
 
 /* 地図の右下のズームレベル(縮尺の目盛りの上、「＋」「−」ボタンの下): 「Z=16.3」のボタンと、
@@ -731,6 +770,124 @@ body.is-resizing {
   background: rgb(255 255 255 / 90%);
   accent-color: var(--accent);
   cursor: pointer;
+}
+
+/* 地図の右上の「別ウインドウで開く」(map-view.js)。右下のズームレベルのボタンと同じ見た目にする */
+.map .map-window-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border: 2px solid rgb(0 0 0 / 20%);
+  border-radius: 4px;
+  background: #fff;
+  background-clip: padding-box;
+  color: #333;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.4;
+  text-decoration: none;
+}
+
+.map .map-window-link:hover {
+  background-color: #f4f4f4;
+  color: #333;
+}
+
+.map .map-window-link:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.map .map-window-link svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* 写真のマーカーを押したときに出す、写真の縮小版と説明(map-view.js)。縮小版は押すと元の写真を大きく表示する。
+   地図の上の吹き出しは Leaflet のまま白地なので、ダークモードでも色を固定する */
+.map .map-photo {
+  display: grid;
+  gap: 6px;
+}
+
+.map .map-photo-thumb {
+  display: block;
+  justify-self: center;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: none;
+  cursor: zoom-in;
+}
+
+.map .map-photo-thumb img,
+.map img.map-photo-thumb {
+  display: block;
+  border-radius: 4px;
+}
+
+.map img.map-photo-thumb {
+  cursor: default;
+}
+
+.map .map-photo-thumb:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.map .map-photo-missing {
+  padding: 16px 12px;
+  border-radius: 4px;
+  background: #f1f3f2;
+  color: #666;
+  text-align: center;
+}
+
+.map .map-photo-info {
+  color: #333;
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.map .map-photo-info > :first-child {
+  font-weight: 700;
+}
+
+/* マウスを乗せたときの表示の、最後に添える案内(「押すと写真を表示」) */
+.map .map-tooltip-hint {
+  margin-top: 2px;
+  color: #777;
+  font-size: 11px;
+}
+
+/* 別ウインドウの地図(map.html): 地図をウインドウいっぱいに広げ(正方形にしない)、その下に凡例を出す */
+body.map-window {
+  height: 100vh;
+  height: 100dvh;
+  min-height: 0;
+  padding: 8px;
+  gap: 6px;
+}
+
+body.map-window .map {
+  flex: 1;
+  min-height: 0;
+  aspect-ratio: auto;
+}
+
+body.map-window .map-legend {
+  margin: 0;
+}
+
+body.map-window .message {
+  margin: 8px;
 }
 
 .map-legend {

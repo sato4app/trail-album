@@ -119,7 +119,7 @@
               <div id="gpxPointsItem"><dt>記録地点数(合計)</dt><dd id="gpxPoints"></dd></div>
               <div id="gpxDistanceItem"><dt>移動距離(合計)</dt><dd id="gpxDistance"></dd></div>
             </dl>
-            <p class="hint">GPX ファイルは、「保存する」で元のファイルのまま一緒に保存できます。</p>
+            <p class="hint">GPX は、「保存する」で一緒に保存できます(2つ以上なら1つのファイルにまとめます)。</p>
             <!-- 経路ごとの内訳(GPX ごとに、ファイル名の行の下へ 1-1, 1-2 … と並べる) -->
             <h4 class="sub-title">経路ごとの内訳</h4>
             <div class="table-wrap">
@@ -155,7 +155,7 @@
       <h2 id="outputTitle"><span class="step">3</span>保存する</h2>
       <p class="hint">
         写真の一覧の Excel ファイルと、元の画質の写真を入れた「photos」フォルダを、1つのフォルダにまとめて保存します。
-        読み込んだ KMZ・GPX ファイルも、元のファイルのまま一緒に保存できます(GPX だけでも保存できます)。保存するものは「KMZ」「GPX」のチェックで選べます。
+        読み込んだ KMZ・GPX も、それぞれ1つのファイルにして一緒に保存できます(GPX だけでも保存できます)。保存するものは「KMZ」「GPX」のチェックで選べます。
         何がどんな名前で保存されるかは、下の「保存される内容」で確かめられます。
       </p>
       <!-- 保存方法の使い分け(フォルダに保存できないブラウザでは、その項目を隠す: app.js) -->
@@ -190,20 +190,21 @@
             <p class="field-note" id="saveNameNote" hidden></p>
           </div>
         </div>
-        <!-- 保存するもの: KMZ は KMZ から作るもの全部(Excel・写真・元の KMZ)、GPX は元の GPX をまとめて切り替える -->
+        <!-- 保存するもの: KMZ は KMZ から作るもの全部(Excel・写真・KMZ)、GPX は GPX を切り替える -->
         <div class="save-field" role="group" aria-labelledby="includeLabel">
           <span class="save-label" id="includeLabel">保存するもの</span>
           <div class="save-field-body save-checks">
             <label class="check">
               <input type="checkbox" id="includeKmz">
               <span>KMZ <span class="check-count" id="includeKmzCount"></span>
-                <span class="check-desc">写真の一覧(Excel)・写真(photos)・元の KMZ ファイル</span></span>
+                <span class="check-desc">写真の一覧(Excel)・写真(photos)・KMZ ファイル</span></span>
             </label>
             <label class="check">
               <input type="checkbox" id="includeGpx">
               <span>GPX <span class="check-count" id="includeGpxCount"></span>
-                <span class="check-desc">元の GPX ファイル</span></span>
+                <span class="check-desc">GPX ファイル</span></span>
             </label>
+            <span class="field-help">KMZ・GPX は、2つ以上読み込んでいれば、それぞれ1つのファイルにまとめて保存します(1つなら元のファイルのまま)。</span>
           </div>
         </div>
         <!-- 「フォルダに保存」の保存先(フォルダに保存できないブラウザでは隠す: app.js) -->
