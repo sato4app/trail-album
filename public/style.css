@@ -133,6 +133,25 @@ main {
   font-size: 1.15rem;
 }
 
+/* カードの見出しと、その右のボタン(「1 KMZ, GPX ファイルを選ぶ」の「すべてクリア」) */
+.card-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0 0 14px;
+}
+
+.card-head h2 {
+  margin: 0;
+}
+
+/* 狭い画面で見出しの下に回ったときも、右に寄せる */
+.card-head .btn {
+  margin-left: auto;
+}
+
 .step {
   display: inline-grid;
   place-items: center;

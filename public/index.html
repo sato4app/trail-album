@@ -43,7 +43,12 @@
   <main class="inner">
     <!-- 1. KMZ・GPX の選択(いくつでも一緒に選べる。後から選んだファイルは今の内容に追加する) -->
     <section class="card" aria-labelledby="selectTitle">
-      <h2 id="selectTitle"><span class="step">1</span>KMZ, GPX ファイルを選ぶ</h2>
+      <div class="card-head">
+        <h2 id="selectTitle"><span class="step">1</span>KMZ, GPX ファイルを選ぶ</h2>
+        <!-- 読み込んだ KMZ・GPX をすべて外し、ページを開いたときの状態に戻す(読み込んでいるときだけ出す: app.js の onClearAll) -->
+        <button type="button" class="btn btn-small" id="btnClearAll" hidden
+          title="読み込んだ KMZ・GPX をすべて、この画面から外し、ページを開いたときの状態に戻します（ファイルは消えません）">すべてクリア</button>
+      </div>
       <div class="drop-zone" id="dropZone">
         <p class="drop-lead">ここに KMZ, GPX ファイルをドラッグ＆ドロップ</p>
         <p class="drop-or">または</p>

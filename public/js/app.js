@@ -90,6 +90,7 @@ function init() {
   setupDragAndDrop();
   setupColSplitter($('previewCols'), $('colSplitter'), $('kmzCol'));
   connectMapWindow({ onSelect: (no) => selectPhoto(no, 'window') }); // 別ウインドウの地図でマーカーを押した
+  $('btnClearAll').addEventListener('click', onClearAll);
   $('btnClearKmz').addEventListener('click', onClearKmz);
   $('btnClearGpx').addEventListener('click', onClearGpx);
 
@@ -265,6 +266,22 @@ function formatPoints(segments) {
   return `${countPoints(segments)} 点${routes}`;
 }
 
+// 読み込んだ KMZ・GPX をすべて画面から外し、ページを開いたときの状態に戻す(ファイルは消えない)。
+// 再読み込み(F5)と同じく、保存の設定(名前・保存するもの)も最初に戻す。保存先は、再読み込みしても残るものなので残す。
+// 地図を別ウインドウで開いていれば、そちらには「表示する地点がありません」と出る
+function onClearAll() {
+  if (state.busy || (!state.album && !state.track)) return;
+  state.kmzFiles = [];
+  state.segments = [];
+  state.track = null; // 先に KMZ 側を作り直すとき、地図に GPX の経路を描き直さないように
+  showKmzPreview();
+  showGpxPreview();
+  state.save.includeKmz = true;
+  state.save.includeGpx = true;
+  showStatus([{ message: '読み込んだ KMZ・GPX をすべてクリアしました。', kind: 'ok' }]);
+  $('btnPickFile').focus(); // 押したボタンが消えるので、次に押すボタンへ移す(キーボードで操作している人のため)
+}
+
 // 読み込んだ KMZ を画面から外す(ファイルは消えない)
 function onClearKmz() {
   if (state.busy || state.kmzFiles.length === 0) return;
@@ -339,9 +356,11 @@ function showGpxPreview({ fit = true } = {}) {
   refreshSaveSection();
 }
 
-// KMZ・GPX のどちらかを読み込んでいるときだけ「内容を確かめる」を出す
+// KMZ・GPX のどちらかを読み込んでいるときだけ「内容を確かめる」と、上の「すべてクリア」を出す
 function updatePreviewSection() {
-  $('previewSection').hidden = !state.album && !state.track;
+  const hasData = !!state.album || !!state.track;
+  $('previewSection').hidden = !hasData;
+  $('btnClearAll').hidden = !hasData;
 }
 
 // KMZ・GPX の番号(それぞれ 1, 2, 3 …)。経路の番号は、GPX の番号と GPX の中での順番(1-1, 1-2, 2-1 …)
@@ -919,7 +938,7 @@ async function runOutput(output, save, label) {
 // ===== 表示の切り替え =====
 function setBusy(busy) {
   state.busy = busy;
-  for (const id of ['btnPickFile', 'btnClearKmz', 'btnClearGpx', 'btnPickSaveDir']) {
+  for (const id of ['btnPickFile', 'btnClearAll', 'btnClearKmz', 'btnClearGpx', 'btnPickSaveDir']) {
     $(id).disabled = busy;
   }
   // 保存先の「クリア」と、保存の設定・保存ボタンは、ほかの条件でも押せなくするので別に扱う
