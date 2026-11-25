@@ -6,7 +6,8 @@
 export const canSaveToFolder = typeof globalThis.showDirectoryPicker === 'function';
 
 // ===== 保存先(IndexedDB) =====
-// 保存先(出力フォルダを作る親フォルダ)は「保存先を指定」で1回選べば覚えておき、次からは選ぶ画面を出さずに使う。
+// 保存先(出力フォルダを作る親フォルダ。画面では「保存先フォルダ」)は「保存先フォルダを指定」で1回選べば覚えておき、
+// 次からは選ぶ画面を出さずに使う。
 // フォルダのハンドルは IndexedDB にそのまま保存できる。
 // 書き込みの権限はブラウザが管理する。同じ訪問のうち(このサイトのタブを全部閉じるまで)は、
 // 一度許可されれば確認なしで書き込める。次の訪問では requestPermission で改めて確認が出るが、
@@ -69,7 +70,7 @@ async function storeSaveDir(handle) {
 }
 
 // ===== フォルダへ直接保存 =====
-// 「保存先を指定」ボタン: 保存先を選ぶ画面を出し、選ばれたフォルダを保存先として覚える。キャンセルされたら null。
+// 「保存先フォルダを指定」ボタン: 保存先を選ぶ画面を出し、選ばれたフォルダを保存先として覚える。キャンセルされたら null。
 // ボタンを押した直後に呼ぶこと(間に時間のかかる処理を挟むと、利用者の操作によるものと見なされず止められる)。
 export async function pickSaveDir() {
   const options = { ...RW };
@@ -85,7 +86,7 @@ export async function pickSaveDir() {
       // 覚えていた保存先が消えた・移動したなどで画面を開けないときは、覚えた保存先を忘れる。
       // 画面はボタンを押した直後にしか開けないため、ここで開き直さず、もう一度押してもらう
       await storeSaveDir(null);
-      throw new Error('保存先を選ぶ画面を開けませんでした。もう一度ボタンを押してください。');
+      throw new Error('保存先フォルダを選ぶ画面を開けませんでした。もう一度ボタンを押してください。');
     }
     throw err;
   }
@@ -102,18 +103,18 @@ export async function clearSaveDir() {
 // - 保存先のフォルダが移動・削除されていたら、覚えた保存先を忘れる
 export async function prepareSaveDir() {
   const dir = saveDir;
-  if (!dir) throw new Error('保存先が指定されていません。');
+  if (!dir) throw new Error('保存先フォルダが指定されていません。');
   if ((await dir.queryPermission(RW)) !== 'granted' && (await dir.requestPermission(RW)) !== 'granted') {
     throw new Error(
-      `保存先「${dir.name}」への書き込みが許可されませんでした。` +
-      'もう一度「フォルダに保存」を押して許可するか、「保存先を指定」で別のフォルダを指定してください。'
+      `保存先フォルダ「${dir.name}」への書き込みが許可されませんでした。` +
+      'もう一度「フォルダに保存」を押して許可するか、「保存先フォルダを指定」で別のフォルダを指定してください。'
     );
   }
   if (!(await dirExists(dir))) {
     await storeSaveDir(null);
     throw new Error(
-      `保存先のフォルダ「${dir.name}」が見つかりません(移動・削除された可能性があります)。` +
-      '「保存先を指定」で、保存先のフォルダを指定し直してください。'
+      `保存先フォルダ「${dir.name}」が見つかりません(移動・削除された可能性があります)。` +
+      '「保存先フォルダを指定」で指定し直してください。'
     );
   }
   return dir;

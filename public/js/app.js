@@ -736,7 +736,7 @@ function renderSavePreview() {
   const zipName = `${plan.folderName}.zip`;
   if (canSaveToFolder) {
     const dir = currentSaveDir();
-    $('saveTree').replaceChildren(treeItem(dir ? dir.name : '（保存先が未指定）', '保存先', 'folder', [
+    $('saveTree').replaceChildren(treeItem(dir ? dir.name : '（未指定）', '保存先フォルダ', 'folder', [
       treeItem(plan.folderName, '新しく作るフォルダ', 'folder', contents, noName)
     ], !dir));
     $('saveTreeNote').textContent =
@@ -795,10 +795,11 @@ function treeItem(name, note, kind, children = [], unset = false) {
 }
 
 // 保存先の表示(ブラウザからはフォルダの名前だけが分かり、場所(パス)は分からない)。
-// 未指定なら「（フォルダ未指定）」を薄く表示し、「クリア」を押せないようにする。保存される内容の木の先頭も合わせる
+// 未指定なら「（未指定）」を薄く表示し、「クリア」を押せないようにする(項目名が「保存先フォルダ」なので、
+// それだけで分かる)。保存される内容の木の先頭も合わせる
 function updateSaveDirLabel() {
   const dir = currentSaveDir();
-  $('saveDirName').textContent = dir ? dir.name : '（フォルダ未指定）';
+  $('saveDirName').textContent = dir ? dir.name : '（未指定）';
   $('saveDirName').classList.toggle('is-unset', !dir);
   $('btnClearSaveDir').disabled = state.busy || !dir;
   renderSavePreview();
@@ -809,10 +810,10 @@ async function onPickSaveDir() {
   showResult('');
   try {
     const dir = await pickSaveDir();
-    if (dir) showResult(`保存先を「${dir.name}」にしました。`, 'ok');
+    if (dir) showResult(`保存先フォルダを「${dir.name}」にしました。`, 'ok');
   } catch (err) {
     // まだ何も書き込んでいないので、失敗ではなく次の操作の案内として伝える
-    showResult(err.message || '保存先を選べませんでした。もう一度「保存先を指定」を押してください。', 'guide');
+    showResult(err.message || '保存先フォルダを選べませんでした。もう一度「保存先フォルダを指定」を押してください。', 'guide');
   } finally {
     updateSaveDirLabel();
   }
@@ -822,7 +823,7 @@ async function onClearSaveDir() {
   if (state.busy || !currentSaveDir()) return;
   await clearSaveDir();
   updateSaveDirLabel();
-  showResult('保存先をクリアしました。', 'ok');
+  showResult('保存先フォルダの指定をクリアしました(フォルダや写真は消えていません)。', 'ok');
 }
 
 async function onSaveFolder() {
@@ -832,7 +833,7 @@ async function onSaveFolder() {
   showResult('');
   // 保存先が未指定なら、失敗ではなく次の操作の案内として伝える
   if (!currentSaveDir()) {
-    showResult('保存先が指定されていません。「保存先を指定」で、保存先のフォルダを指定してください。', 'guide');
+    showResult('保存先フォルダが指定されていません。「保存先フォルダを指定」で指定してください。', 'guide');
     return;
   }
 
@@ -842,7 +843,7 @@ async function onSaveFolder() {
     parent = await prepareSaveDir();
   } catch (err) {
     // 許可されなかった・保存先が見つからないなど。まだ何も書き込んでいないので案内として伝える
-    showResult(err.message || '保存先を使えませんでした。「保存先を指定」で指定し直してください。', 'guide');
+    showResult(err.message || '保存先フォルダを使えませんでした。「保存先フォルダを指定」で指定し直してください。', 'guide');
     return;
   } finally {
     updateSaveDirLabel();

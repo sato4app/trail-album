@@ -166,9 +166,9 @@
       <!-- 保存方法の使い分け(フォルダに保存できないブラウザでは、その項目を隠す: app.js) -->
       <ul class="save-guide">
         <li id="guideFolder">
-          <strong>フォルダに保存</strong>(Chrome・Edge): 保存先のフォルダの中に、そのまま使える形で保存します。
+          <strong>フォルダに保存</strong>(Chrome・Edge): 保存先フォルダの中に、そのまま使える形で保存します。
           パソコンにバックアップを残すときに向いています。
-          保存先は「保存先を指定」で1回選べば覚えておき、次からはそのまま保存します。
+          保存先フォルダは「保存先フォルダを指定」で1回選べば覚えておき、次からはそのまま保存します。
           ブラウザを開き直した後の最初の保存では、書き込みを許可するか確かめられます。
           そこで毎回許可するほうを選ぶと、次からは確かめられずに保存できます。
         </li>
@@ -214,12 +214,12 @@
         </div>
         <!-- 「フォルダに保存」の保存先(フォルダに保存できないブラウザでは隠す: app.js) -->
         <div class="save-field" id="saveDirRow" hidden>
-          <span class="save-label">保存先</span>
+          <span class="save-label">保存先フォルダ</span>
           <div class="save-field-body save-dir">
-            <strong id="saveDirName" class="is-unset">（フォルダ未指定）</strong>
-            <button type="button" class="btn btn-small" id="btnPickSaveDir">保存先を指定</button>
+            <strong id="saveDirName" class="is-unset">（未指定）</strong>
+            <button type="button" class="btn btn-small" id="btnPickSaveDir">保存先フォルダを指定</button>
             <button type="button" class="btn btn-small" id="btnClearSaveDir" disabled
-              title="保存先の指定を解除します（フォルダや写真は消えません）">クリア</button>
+              title="保存先フォルダの指定を解除します（フォルダや写真は消えません）">クリア</button>
           </div>
         </div>
         <div class="save-field">
