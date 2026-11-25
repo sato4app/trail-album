@@ -31,7 +31,7 @@ import {
 } from './naming.js';
 import { buildWorkbookBlob } from './excel-writer.js';
 import { buildMergedKmz, buildMergedGpx } from './merge-writer.js';
-import { PHOTO_COLOR, PHOTOS_DIR, MAX_NAME_LENGTH } from './constants.js';
+import { PHOTO_COLOR, PHOTOS_DIR, MAX_NAME_LENGTH, THUMB_LONG_SIDE } from './constants.js';
 import {
   canSaveToFolder,
   loadSaveDir,
@@ -492,7 +492,7 @@ function cell(text, className) {
 }
 
 // 写真の一覧の1行: 1列目に No.(保存の通し番号)・名称・撮影日時・緯度, 経度を1行ずつ、
-// 2列目に写真(押すと、地図でその写真の場所に縮小版を出す: selectPhoto)、3列目にボタン(拡大表示・写真をコピー・写真を保存)
+// 2列目に写真(押すと、地図でその写真の場所に縮小版を出す: selectPhoto)、3列目にボタン(拡大表示・縮小版をコピー・写真を保存)
 function photoRow(photo) {
   const tr = document.createElement('tr');
   tr.dataset.no = String(photo.no);
@@ -540,13 +540,15 @@ function photoRow(photo) {
   const notViewable = photo.thumb ? '' : 'この形式は表示できません';
   const noCopy = canCopyImage
     ? notViewable
-    : 'このブラウザでは写真をコピーできません(Chrome・Edge などで使えます)';
+    : 'このブラウザでは縮小版をコピーできません(Chrome・Edge などで使えます)';
   const actions = document.createElement('div');
   actions.className = 'photo-actions';
   actions.append(
     actionButton(photo, '拡大表示', '元の写真を大きく表示します', notViewable, () => openPhoto(photo)),
-    actionButton(photo, '写真をコピー', '元の大きさの写真をコピーします。そのまま貼り付けて使えます',
-      noCopy, (button) => onCopyImage(button, photo.blob)),
+    actionButton(photo, '縮小版をコピー',
+      `写真の縮小版(長辺 ${THUMB_LONG_SIDE}px まで。左の写真・Excel の画像と同じもの)をコピーします。` +
+      'そのまま貼り付けて使えます(元の画質の写真は「写真を保存」か、保存した photos フォルダの写真を使ってください)',
+      noCopy, (button) => onCopyImage(button, photo.thumb.blob)),
     actionButton(photo, '写真を保存', `元の写真を「${photo.fileName}」としてダウンロードします`,
       '', () => saveImage(photo))
   );

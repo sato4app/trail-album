@@ -63,8 +63,11 @@ export const SPLITTER_KEY_STEP_LARGE = 80;
 
 // ===== 縮小版(thumbnail.js) =====
 
-// 画面の一覧と Excel に使う縮小版の長辺(px)と、JPEG の品質(0〜1)
-export const THUMB_LONG_SIDE = 400;
+// 縮小版の長辺(px。元の写真より大きくはしない)と、JPEG の品質(0〜1)。
+// 縮小版は1種類で、画面の写真の一覧・地図の吹き出し・Excel に埋め込む画像・「縮小版をコピー」のすべてに使う。
+// 大きくするほど画質は上がるが、Excel ファイルが重くなる(画像の大きさは、おおよそ縦×横の画素数に比例する)。
+// 「縮小版をコピー」はクリップボードの制約で PNG になり、写真では JPEG の数倍の大きさになる
+export const THUMB_LONG_SIDE = 600;
 export const THUMB_JPEG_QUALITY = 0.85;
 
 // ===== 保存(naming.js・excel-writer.js・app.js) =====

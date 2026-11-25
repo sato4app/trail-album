@@ -641,7 +641,7 @@ body.is-resizing {
   width: calc(var(--thumb-size) + 24px); /* 写真と、左右の余白(12px ずつ) */
 }
 
-/* 写真の右のボタン(拡大表示・写真をコピー・写真を保存)を縦に並べる */
+/* 写真の右のボタン(拡大表示・縮小版をコピー・写真を保存)を縦に並べる */
 .photo-table .col-actions {
   width: 1%; /* ボタンの幅だけにする */
   padding-left: 0;
